@@ -5,6 +5,7 @@ import (
 	"github.com/denverquane/go-splitflap/routine"
 	"github.com/denverquane/go-splitflap/splitflap"
 	"log/slog"
+	"os"
 	"time"
 )
 
@@ -43,45 +44,44 @@ func main() {
 
 	hub.AddTranslation('°', 'd')
 
-	err = hub.CreateDashboard("Clock")
+	err = hub.CreateDashboard("Weather")
 	if err != nil {
 		slog.Error(err.Error())
 	}
 
-	//err = hub.AddRoutineToDashboard(routine.CLOCK, "Clock", &routine.ClockConfig{
-	//	RemoveLeadingZero: false,
-	//	Military:          false,
-	//	Precise:           false,
-	//	AMPMText:          false,
-	//	LocSize: display.LocationSize{Location: display.Location{X: 0, Y: 0}, Size: display.Size{
-	//		Width:  6,
-	//		Height: 1,
-	//	}},
-	//})
-	err = hub.AddRoutineToDashboard(routine.WEATHER, "Clock", &routine.WeatherConfig{
-		LocSize: display.LocationSize{
-			Location: display.Location{
-				X: 0, Y: 0,
-			},
-			Size: display.Size{
-				Width:  5,
-				Height: 1,
+	rout := routine.Routine{
+		Name: "Current Temp",
+		Type: routine.WEATHER,
+		Routine: &routine.WeatherRoutine{
+			ApiKey:       os.Getenv("OWM_API_KEY"),
+			PollRateSecs: 60,
+			Units:        "F",
+			ShowUnits:    false,
+			ShowDegree:   false,
+			LocationID:   5505411,
+			LocSize: display.LocationSize{
+				Location: display.Location{
+					X: 1, Y: 0,
+				},
+				Size: display.Size{
+					Width:  5,
+					Height: 1,
+				},
 			},
 		},
-		ApiKey:       "96fdf51d13b6528f6fbfdc0c7974ca0f",
-		PollRateSecs: 60,
-		Units:        "F",
-		LocationID:   5505411,
-	})
+	}
+
+	err = hub.AddRoutineToDashboard("Weather", rout)
+
 	if err != nil {
 		slog.Error(err.Error())
 	}
 
 	go hub.Run(killDisplayChan, messages)
 
-	err = hub.ActivateDashboard("Clock")
+	err = hub.ActivateDashboard("Weather")
 	if err != nil {
-		slog.Error(err.Error(), "dashboard", "Clock")
+		slog.Error(err.Error(), "dashboard", "Weather")
 		return
 	}
 

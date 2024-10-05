@@ -14,6 +14,7 @@ type RoutineType string
 
 type RoutineIface interface {
 	SizeRange() (display.Min, display.Max)
+	LocationSize() display.LocationSize
 	Start(queue chan<- Message) error
 	Stop()
 }
@@ -33,4 +34,11 @@ type RoutineJSON struct {
 func SupportsSize(routine RoutineIface, size display.Size) bool {
 	mins, maxs := routine.SizeRange()
 	return size.Width >= mins.Width && size.Width <= maxs.Width && size.Height >= mins.Height && size.Height <= maxs.Height
+}
+
+var AllRoutines = map[RoutineType]RoutineIface{
+	TEXT:    &TextRoutine{},
+	CLOCK:   &ClockRoutine{},
+	TIMER:   &TimerRoutine{},
+	WEATHER: &WeatherRoutine{},
 }
