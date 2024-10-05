@@ -1,26 +1,33 @@
 package routine
 
-import "github.com/denverquane/go-splitflap/display"
+import (
+	"encoding/json"
+	"github.com/denverquane/go-splitflap/display"
+)
 
 type Message struct {
 	display.LocationSize
 	Text string
 }
 
-type RoutineName string
-
-type RoutineConfigIface interface {
-	SetLocationSize(locAndSize display.LocationSize)
-	GetLocationSize() display.LocationSize
-}
+type RoutineType string
 
 type RoutineIface interface {
-	Name() RoutineName
 	SizeRange() (display.Min, display.Max)
-	CheckConfig(config RoutineConfigIface) error
-	SetConfig(config RoutineConfigIface) error
 	Start(queue chan<- Message) error
 	Stop()
+}
+
+type Routine struct {
+	Name    string
+	Type    RoutineType
+	Routine RoutineIface
+}
+
+type RoutineJSON struct {
+	Name    string
+	Type    RoutineType
+	Routine json.RawMessage
 }
 
 func SupportsSize(routine RoutineIface, size display.Size) bool {

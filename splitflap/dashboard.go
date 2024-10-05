@@ -2,52 +2,56 @@ package splitflap
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/denverquane/go-splitflap/routine"
-	"maps"
-	"slices"
 )
 
 type Dashboard struct {
-	RoutineConfig map[routine.RoutineName]routine.RoutineConfigIface
+	Routines map[string]routine.Routine
 }
 
 func (d *Dashboard) UnmarshalJSON(data []byte) error {
-	type Alias Dashboard
-
 	aux := &struct {
-		RoutineConfig map[routine.RoutineName]json.RawMessage
+		Routines map[string]routine.RoutineJSON
 	}{}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
-	if d.RoutineConfig == nil {
-		d.RoutineConfig = make(map[routine.RoutineName]routine.RoutineConfigIface)
-	}
-
-	for routineCfgName, rawRoutineCfg := range aux.RoutineConfig {
-		switch routineCfgName {
+	for _, v := range aux.Routines {
+		switch v.Type {
 		case routine.CLOCK:
-			var Clock routine.ClockConfig
-			if err := json.Unmarshal(rawRoutineCfg, &Clock); err != nil {
+			var clock routine.ClockRoutine
+			if err := json.Unmarshal(v.Routine, &clock); err != nil {
 				return err
 			}
-			d.RoutineConfig[routineCfgName] = &Clock
-		case routine.TIMER:
-			var Timer routine.TimerConfig
-			if err := json.Unmarshal(rawRoutineCfg, &Timer); err != nil {
-				return err
+			d.Routines[v.Name] = routine.Routine{
+				Name:    v.Name,
+				Type:    routine.CLOCK,
+				Routine: &clock,
 			}
-			d.RoutineConfig[routineCfgName] = &Timer
-		default:
-			return fmt.Errorf("unknown config name, can't unmarshal json: %s", routineCfgName)
 		}
 	}
+
 	return nil
 }
 
-func (d *Dashboard) RoutineNames() []routine.RoutineName {
-	return slices.Collect(maps.Keys(d.RoutineConfig))
+func (d *Dashboard) AddRoutine(rout routine.Routine) error {
+	if _, ok := AllRoutines[rout.Type]; !ok {
+		return errors.New("unrecognized routine type")
+	} else {
+		d.Routines[rout.Name] = rout
+		return nil
+	}
+}
+
+func (d *Dashboard) Activate(messageQueue chan<- routine.Message) error {
+	for _, rout := range d.Routines {
+		err := rout.Routine.Start(messageQueue)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

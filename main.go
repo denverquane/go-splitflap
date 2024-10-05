@@ -28,33 +28,50 @@ func main() {
 	hub, err := splitflap.LoadDisplayFromFile(DisplayFile)
 	if err != nil {
 		slog.Error("error loading display from json file", "json file", DisplayFile, "error", err.Error())
-		return
-		//slog.Info("creating new display and writing to file", "json file", DisplayFile)
-		//hub = splitflap.NewDisplay(display.Size{
-		//	Width:  6,
-		//	Height: 1,
-		//})
-		//err = splitflap.WriteDisplayToFile(hub, DisplayFile)
-		//if err != nil {
-		//	slog.Error(err.Error())
-		//	return
-		//}
+		//return
+		slog.Info("creating new display and writing to file", "json file", DisplayFile)
+		hub = splitflap.NewDisplay(display.Size{
+			Width:  6,
+			Height: 1,
+		})
+		err = splitflap.WriteDisplayToFile(hub, DisplayFile)
+		if err != nil {
+			slog.Error(err.Error())
+			return
+		}
 	}
+
+	hub.AddTranslation('°', 'd')
 
 	err = hub.CreateDashboard("Clock")
 	if err != nil {
 		slog.Error(err.Error())
 	}
 
-	err = hub.AddRoutineToDashboard(routine.CLOCK, "Clock", &routine.ClockConfig{
-		RemoveLeadingZero: false,
-		Military:          false,
-		Precise:           false,
-		AMPMText:          false,
-		LocSize: display.LocationSize{Location: display.Location{X: 0, Y: 0}, Size: display.Size{
-			Width:  6,
-			Height: 1,
-		}},
+	//err = hub.AddRoutineToDashboard(routine.CLOCK, "Clock", &routine.ClockConfig{
+	//	RemoveLeadingZero: false,
+	//	Military:          false,
+	//	Precise:           false,
+	//	AMPMText:          false,
+	//	LocSize: display.LocationSize{Location: display.Location{X: 0, Y: 0}, Size: display.Size{
+	//		Width:  6,
+	//		Height: 1,
+	//	}},
+	//})
+	err = hub.AddRoutineToDashboard(routine.WEATHER, "Clock", &routine.WeatherConfig{
+		LocSize: display.LocationSize{
+			Location: display.Location{
+				X: 0, Y: 0,
+			},
+			Size: display.Size{
+				Width:  5,
+				Height: 1,
+			},
+		},
+		ApiKey:       "96fdf51d13b6528f6fbfdc0c7974ca0f",
+		PollRateSecs: 60,
+		Units:        "F",
+		LocationID:   5505411,
 	})
 	if err != nil {
 		slog.Error(err.Error())
