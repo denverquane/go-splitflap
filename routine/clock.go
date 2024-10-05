@@ -19,6 +19,10 @@ type ClockRoutine struct {
 	kill              chan struct{}
 }
 
+func (c *ClockRoutine) LocationSize() display.LocationSize {
+	return c.LocSize
+}
+
 func (c *ClockRoutine) SizeRange() (display.Min, display.Max) {
 	return display.Min{Width: 5, Height: 1}, display.Max{Width: 11, Height: 1}
 }

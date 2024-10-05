@@ -16,6 +16,10 @@ type TimerRoutine struct {
 	kill    chan struct{}
 }
 
+func (t *TimerRoutine) LocationSize() display.LocationSize {
+	return t.LocSize
+}
+
 func (t *TimerRoutine) SizeRange() (display.Min, display.Max) {
 	return display.Min{Width: 5, Height: 1}, display.Max{Width: 5, Height: 1}
 }

@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-var AllRoutines = map[routine.RoutineType]routine.RoutineIface{
-	routine.CLOCK:   &routine.ClockRoutine{},
-	routine.TIMER:   &routine.TimerRoutine{},
-	routine.WEATHER: &routine.WeatherRoutine{},
-}
-
 type Display struct {
 	Size         display.Size
 	Translations map[byte]byte
@@ -95,29 +89,26 @@ func (d *Display) CreateDashboard(name string) error {
 		return errors.New("dashboard already exists with that name")
 	}
 	d.Dashboards[name] = Dashboard{Routines: make(map[string]routine.Routine)}
-	d.write()
-	return nil
+	return d.write()
 }
 
-func (d *Display) AddRoutineToDashboard(dashboardName string, routine routine.Routine) error {
-	locAndSize := routine.GetLocationSize()
+func (d *Display) AddRoutineToDashboard(dashboardName string, rout routine.Routine) error {
+	locAndSize := rout.Routine.LocationSize()
 	if dashboard, ok := d.Dashboards[dashboardName]; !ok {
 		return errors.New("dashboard does not exist")
-	} else if _, ok := AllRoutines[routine.GetType()]; !ok {
-		return errors.New("routine does not exist")
+	} else if _, ok := routine.AllRoutines[rout.Type]; !ok {
+		return errors.New("routine type does not exist")
 	} else if locAndSize.X < 0 || locAndSize.Y < 0 || locAndSize.X > d.Size.Width || locAndSize.Y > d.Size.Height {
 		return errors.New("cannot add routine out of display bounds")
 	} else if locAndSize.X+locAndSize.Width > d.Size.Width || locAndSize.Y+locAndSize.Height > d.Size.Height {
 		return errors.New("adding routine with specified size would exceed display bounds")
 	} else {
-		config.SetLocationSize(locAndSize)
-		err := dashboard.AddRoutine(routineType, routineName, config)
+		err := dashboard.AddRoutine(rout)
 		if err != nil {
 			return err
 		}
 		d.Dashboards[dashboardName] = dashboard
-		d.write()
-		return nil
+		return d.write()
 	}
 }
 

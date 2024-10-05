@@ -14,22 +14,23 @@ func (d *Dashboard) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		Routines map[string]routine.RoutineJSON
 	}{}
+	d.Routines = make(map[string]routine.Routine)
 
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
 	for _, v := range aux.Routines {
-		switch v.Type {
-		case routine.CLOCK:
-			var clock routine.ClockRoutine
-			if err := json.Unmarshal(v.Routine, &clock); err != nil {
+		if rout, ok := routine.AllRoutines[v.Type]; !ok {
+			return errors.New("unrecognized routine type")
+		} else {
+			if err := json.Unmarshal(v.Routine, rout); err != nil {
 				return err
 			}
 			d.Routines[v.Name] = routine.Routine{
 				Name:    v.Name,
-				Type:    routine.CLOCK,
-				Routine: &clock,
+				Type:    v.Type,
+				Routine: rout,
 			}
 		}
 	}
@@ -38,7 +39,7 @@ func (d *Dashboard) UnmarshalJSON(data []byte) error {
 }
 
 func (d *Dashboard) AddRoutine(rout routine.Routine) error {
-	if _, ok := AllRoutines[rout.Type]; !ok {
+	if _, ok := routine.AllRoutines[rout.Type]; !ok {
 		return errors.New("unrecognized routine type")
 	} else {
 		d.Routines[rout.Name] = rout
