@@ -1,13 +1,13 @@
 package display
 
 type Size struct {
-	Width  int
-	Height int
+	Width  int `json:"width"`
+	Height int `json:"height"`
 }
 
 type Location struct {
-	X int
-	Y int
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
 type Min Size

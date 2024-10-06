@@ -11,13 +11,13 @@ import (
 )
 
 type Display struct {
-	Size         display.Size
-	Translations map[byte]byte
-	Dashboards   map[string]Dashboard
+	Size         display.Size         `json:"size"`
+	Translations map[byte]byte        `json:"translations"`
+	Dashboards   map[string]Dashboard `json:"dashboards"`
 
 	filepath string
 
-	activeDashboard *Dashboard
+	activeDashboard string
 
 	inMessages chan routine.Message
 }
@@ -28,7 +28,7 @@ func NewDisplay(size display.Size) *Display {
 		Translations:    make(map[byte]byte),
 		Dashboards:      make(map[string]Dashboard),
 		filepath:        "",
-		activeDashboard: nil,
+		activeDashboard: "",
 		inMessages:      make(chan routine.Message),
 	}
 }
@@ -51,7 +51,7 @@ func LoadDisplayFromFile(path string) (*Display, error) {
 		return nil, err
 	}
 	d.filepath = path
-	d.activeDashboard = nil
+	d.activeDashboard = ""
 	d.inMessages = make(chan routine.Message)
 	return &d, nil
 }
@@ -88,7 +88,7 @@ func (d *Display) CreateDashboard(name string) error {
 	if _, ok := d.Dashboards[name]; ok {
 		return errors.New("dashboard already exists with that name")
 	}
-	d.Dashboards[name] = Dashboard{Routines: make(map[string]routine.Routine)}
+	d.Dashboards[name] = Dashboard{Routines: []routine.Routine{}}
 	return d.write()
 }
 
@@ -96,7 +96,7 @@ func (d *Display) AddRoutineToDashboard(dashboardName string, rout routine.Routi
 	locAndSize := rout.Routine.LocationSize()
 	if dashboard, ok := d.Dashboards[dashboardName]; !ok {
 		return errors.New("dashboard does not exist")
-	} else if _, ok := routine.AllRoutines[rout.Type]; !ok {
+	} else if _, ok = routine.AllRoutines[rout.Type]; !ok {
 		return errors.New("routine type does not exist")
 	} else if locAndSize.X < 0 || locAndSize.Y < 0 || locAndSize.X > d.Size.Width || locAndSize.Y > d.Size.Height {
 		return errors.New("cannot add routine out of display bounds")
@@ -113,18 +113,19 @@ func (d *Display) AddRoutineToDashboard(dashboardName string, rout routine.Routi
 }
 
 func (d *Display) DeactivateDashboard() error {
-	if d.activeDashboard == nil {
+	if d.activeDashboard == "" {
 		return nil
 	}
-	for _, rout := range d.activeDashboard.Routines {
-		rout.Routine.Stop()
+
+	for _, rout := range d.Dashboards[d.activeDashboard].Routines {
+		go rout.Routine.Stop()
 	}
-	d.activeDashboard = nil
+	d.activeDashboard = ""
 	return nil
 }
 
 func (d *Display) ActivateDashboard(name string) error {
-	if d.activeDashboard != nil {
+	if d.activeDashboard != "" {
 		err := d.DeactivateDashboard()
 		if err != nil {
 			return err
@@ -137,7 +138,7 @@ func (d *Display) ActivateDashboard(name string) error {
 		if err != nil {
 			return err
 		}
-		d.activeDashboard = &dashboard
+		d.activeDashboard = name
 	}
 	return nil
 }

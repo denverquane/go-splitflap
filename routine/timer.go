@@ -4,15 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/denverquane/go-splitflap/display"
+	"log/slog"
 	"strings"
 	"time"
 )
 
-const TIMER = "Timer"
+const TIMER = "TIMER"
 
 type TimerRoutine struct {
-	End     time.Time
-	LocSize display.LocationSize
+	End     time.Time            `json:"end"`
+	LocSize display.LocationSize `json:"loc_size"`
 	kill    chan struct{}
 }
 
@@ -24,15 +25,21 @@ func (t *TimerRoutine) SizeRange() (display.Min, display.Max) {
 	return display.Min{Width: 5, Height: 1}, display.Max{Width: 5, Height: 1}
 }
 
-func (t *TimerRoutine) Start(queue chan<- Message) error {
+func (t *TimerRoutine) Check() error {
 	if !SupportsSize(t, t.LocSize.Size) {
 		return errors.New("routine does not support that size")
 	}
+	return nil
+}
+
+func (t *TimerRoutine) Start(queue chan<- Message) error {
+	t.kill = make(chan struct{})
 	go func() {
 		start := time.Now()
 		for {
 			select {
 			case <-t.kill:
+				slog.Info("timer routine received kill signal, exiting")
 				return
 			default:
 				now := time.Now()

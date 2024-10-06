@@ -7,13 +7,12 @@ import (
 	"time"
 )
 
-const TEXT = "Text"
+const TEXT = "TEXT"
 
 type TextRoutine struct {
-	Text        string
-	RefreshSecs int
-	LocSize     display.LocationSize
-	kill        chan struct{}
+	Text    string               `json:"text"`
+	LocSize display.LocationSize `json:"loc_size"`
+	kill    chan struct{}
 }
 
 func (t *TextRoutine) LocationSize() display.LocationSize {
@@ -24,29 +23,35 @@ func (t *TextRoutine) SizeRange() (display.Min, display.Max) {
 	return display.Min{Width: 1, Height: 1}, display.Max{Width: 100, Height: 100}
 }
 
-func (t *TextRoutine) Start(queue chan<- Message) error {
+func (t *TextRoutine) Check() error {
 	if !SupportsSize(t, t.LocSize.Size) {
 		return errors.New("routine does not support that size")
 	}
 	if len(t.Text) > t.LocSize.Width {
 		return errors.New("text length exceeds defined routine width")
 	}
+	return nil
+}
+
+func (t *TextRoutine) Start(queue chan<- Message) error {
 	refreshTime := time.Now()
+	t.kill = make(chan struct{})
 	go func() {
 		slog.Info("Text Routine Started")
 
 		for {
 			select {
 			case <-t.kill:
+				slog.Info("text routine received kill signal, exiting")
 				return
 			default:
 				now := time.Now()
 				if now.After(refreshTime) {
 					queue <- Message{LocationSize: t.LocSize, Text: t.Text}
-					refreshTime = now.Add(time.Duration(t.RefreshSecs) * time.Second)
+					refreshTime = now.Add(time.Duration(60) * time.Minute)
+				} else {
+					time.Sleep(time.Second)
 				}
-
-				time.Sleep(time.Second)
 			}
 		}
 	}()
