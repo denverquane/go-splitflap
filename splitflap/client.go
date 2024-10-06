@@ -2,6 +2,7 @@ package splitflap
 
 import (
 	"errors"
+	"github.com/bep/debounce"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"log/slog"
 	"os"
@@ -16,7 +17,9 @@ type Client struct {
 	qos   byte
 
 	previousMessage string
-	lock            sync.Mutex
+	currentMessage  string
+	messageLock     sync.Mutex
+	debounce        func(func())
 }
 
 type ClientConfig struct {
@@ -75,7 +78,9 @@ func NewSplitflapClient(cfg ClientConfig) Client {
 		qos:   cfg.Qos,
 
 		previousMessage: "",
-		lock:            sync.Mutex{},
+		currentMessage:  "",
+		messageLock:     sync.Mutex{},
+		debounce:        debounce.New(time.Second),
 	}
 }
 
@@ -93,9 +98,13 @@ func (c *Client) Run(kill <-chan struct{}, messages <-chan string) {
 		select {
 		case <-kill:
 			return
-
 		case msg := <-messages:
-			c.publish(msg)
+			c.messageLock.Lock()
+			c.currentMessage = msg
+			c.messageLock.Unlock()
+			// debounce the publish so we're not constantly spamming MQTT (and thus our splitflap) with messages,
+			// when we could consolidate them into a single send
+			c.debounce(c.publishCurrentMessage)
 		default:
 			time.Sleep(time.Millisecond * 100)
 		}
@@ -113,10 +122,13 @@ func (c *Client) disconnect() {
 	c.mqtt.Disconnect(250)
 }
 
-func (c *Client) publish(message string) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) publishCurrentMessage() {
+	c.messageLock.Lock()
+	c.publish(c.currentMessage)
+	c.messageLock.Unlock()
+}
 
+func (c *Client) publish(message string) {
 	if message == c.previousMessage {
 		return
 	}

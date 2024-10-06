@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-const CLOCK = "Clock"
+const CLOCK = "CLOCK"
 
 type ClockRoutine struct {
-	RemoveLeadingZero bool
-	Military          bool
-	Precise           bool
-	AMPMText          bool
-	LocSize           display.LocationSize
+	RemoveLeadingZero bool                 `json:"remove_leading_zero"`
+	Military          bool                 `json:"military"`
+	Precise           bool                 `json:"precise"`
+	AMPMText          bool                 `json:"AMPMText"`
+	LocSize           display.LocationSize `json:"locSize"`
 	kill              chan struct{}
 }
 
@@ -27,10 +27,15 @@ func (c *ClockRoutine) SizeRange() (display.Min, display.Max) {
 	return display.Min{Width: 5, Height: 1}, display.Max{Width: 11, Height: 1}
 }
 
-func (c *ClockRoutine) Start(queue chan<- Message) error {
+func (c *ClockRoutine) Check() error {
 	if !SupportsSize(c, c.LocSize.Size) {
 		return errors.New("routine does not support that size")
 	}
+	return nil
+}
+
+func (c *ClockRoutine) Start(queue chan<- Message) error {
+	c.kill = make(chan struct{})
 	go func() {
 		slog.Info("Clock Routine Started")
 
@@ -39,6 +44,7 @@ func (c *ClockRoutine) Start(queue chan<- Message) error {
 		for {
 			select {
 			case <-c.kill:
+				slog.Info("clock routine received kill signal, exiting")
 				return
 			default:
 				msg := Message{LocationSize: c.LocSize}

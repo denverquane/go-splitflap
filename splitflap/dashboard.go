@@ -4,17 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/denverquane/go-splitflap/routine"
+	"reflect"
 )
 
 type Dashboard struct {
-	Routines map[string]routine.Routine
+	Routines []routine.Routine `json:"routines"`
 }
 
 func (d *Dashboard) UnmarshalJSON(data []byte) error {
 	aux := &struct {
-		Routines map[string]routine.RoutineJSON
+		Routines []routine.RoutineJSON `json:"routines"`
 	}{}
-	d.Routines = make(map[string]routine.Routine)
+	d.Routines = []routine.Routine{}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -24,14 +25,16 @@ func (d *Dashboard) UnmarshalJSON(data []byte) error {
 		if rout, ok := routine.AllRoutines[v.Type]; !ok {
 			return errors.New("unrecognized routine type")
 		} else {
-			if err := json.Unmarshal(v.Routine, rout); err != nil {
+			var newRout routine.RoutineIface
+			newRout = reflect.New(reflect.ValueOf(rout).Elem().Type()).Interface().(routine.RoutineIface)
+			if err := json.Unmarshal(v.Routine, newRout); err != nil {
 				return err
 			}
-			d.Routines[v.Name] = routine.Routine{
+			d.Routines = append(d.Routines, routine.Routine{
 				Name:    v.Name,
 				Type:    v.Type,
-				Routine: rout,
-			}
+				Routine: newRout,
+			})
 		}
 	}
 
@@ -42,17 +45,27 @@ func (d *Dashboard) AddRoutine(rout routine.Routine) error {
 	if _, ok := routine.AllRoutines[rout.Type]; !ok {
 		return errors.New("unrecognized routine type")
 	} else {
-		d.Routines[rout.Name] = rout
+		for _, r := range d.Routines {
+			if r.Name == rout.Name {
+				return errors.New("routine with that name already exists in this dashboard")
+			}
+		}
+		err := rout.Routine.Check()
+		if err != nil {
+			return err
+		}
+		d.Routines = append(d.Routines, rout)
 		return nil
 	}
 }
 
 func (d *Dashboard) Activate(messageQueue chan<- routine.Message) error {
-	for _, rout := range d.Routines {
+	for r, rout := range d.Routines {
 		err := rout.Routine.Start(messageQueue)
 		if err != nil {
 			return err
 		}
+		d.Routines[r] = rout
 	}
 	return nil
 }

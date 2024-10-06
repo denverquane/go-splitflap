@@ -15,20 +15,21 @@ type RoutineType string
 type RoutineIface interface {
 	SizeRange() (display.Min, display.Max)
 	LocationSize() display.LocationSize
+	Check() error
 	Start(queue chan<- Message) error
 	Stop()
 }
 
 type Routine struct {
-	Name    string
-	Type    RoutineType
-	Routine RoutineIface
+	Name    string       `json:"name"`
+	Type    RoutineType  `json:"type"`
+	Routine RoutineIface `json:"routine"`
 }
 
 type RoutineJSON struct {
-	Name    string
-	Type    RoutineType
-	Routine json.RawMessage
+	Name    string          `json:"name"`
+	Type    RoutineType     `json:"type"`
+	Routine json.RawMessage `json:"routine"`
 }
 
 func SupportsSize(routine RoutineIface, size display.Size) bool {
