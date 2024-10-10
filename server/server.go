@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	display2 "github.com/denverquane/go-splitflap/display"
 	"github.com/denverquane/go-splitflap/routine"
 	"github.com/denverquane/go-splitflap/splitflap"
 	"github.com/go-chi/chi/v5"
@@ -11,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 )
 
 func Run(port string, display *splitflap.Display) error {
@@ -25,21 +25,31 @@ func Run(port string, display *splitflap.Display) error {
 			}
 			w.Write(bytes)
 		})
-		r.Post("/size", func(w http.ResponseWriter, r *http.Request) {
-			var size display2.Size
-			err := json.NewDecoder(r.Body).Decode(&size)
-			if err != nil {
-				slog.Error(err.Error())
-				http.Error(w, err.Error(), 422)
-				return
-			}
-			if size.Width < 1 || size.Height < 1 {
-				http.Error(w, "invalid width/height supplied", 400)
-				return
-			}
-			display.Size = size
-			// TODO need to check all routines and make sure they still fit in this display...
-			// TODO should the display be allowed to change sizes?
+		r.Post("/repeat/{char}", func(w http.ResponseWriter, r *http.Request) {
+			char := chi.URLParam(r, "char")
+			str := strings.Repeat(string(char[0]), display.Size.Width*display.Size.Height)
+			display.Set(str)
+			w.Write([]byte("ok"))
+		})
+
+		//r.Post("/size", func(w http.ResponseWriter, r *http.Request) {
+		//	var size display2.Size
+		//	err := json.NewDecoder(r.Body).Decode(&size)
+		//	if err != nil {
+		//		slog.Error(err.Error())
+		//		http.Error(w, err.Error(), 422)
+		//		return
+		//	}
+		//	if size.Width < 1 || size.Height < 1 {
+		//		http.Error(w, "invalid width/height supplied", 400)
+		//		return
+		//	}
+		//	display.Size = size
+		//	// TODO need to check all routines and make sure they still fit in this display...
+		//	// TODO should the display be allowed to change sizes?
+		//})
+		r.Get("/clear", func(w http.ResponseWriter, r *http.Request) {
+			display.Clear()
 		})
 		r.Get("/translations", func(w http.ResponseWriter, r *http.Request) {
 			bytes, err := json.Marshal(display.Translations)
@@ -71,11 +81,7 @@ func Run(port string, display *splitflap.Display) error {
 			w.Write(bytes)
 		})
 		r.Post("/deactivate", func(w http.ResponseWriter, r *http.Request) {
-			err := display.DeactivateDashboard()
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
+			display.DeactivateActiveDashboard()
 			w.Write([]byte("ok"))
 		})
 		r.Get("/{dashboardName}", func(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +157,50 @@ func Run(port string, display *splitflap.Display) error {
 					}
 				}
 			}
+		})
+	})
+
+	r.Route("/rotations", func(r chi.Router) {
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			rotations := slices.Collect(maps.Keys(display.DashboardRotation))
+			bytes, err := json.Marshal(rotations)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			w.Write(bytes)
+		})
+		r.Post("/deactivate", func(w http.ResponseWriter, r *http.Request) {
+			display.DeactivateDashboardRotation()
+			display.DeactivateActiveDashboard()
+			w.Write([]byte("ok"))
+		})
+		r.Post("/{rotationName}/activate", func(w http.ResponseWriter, r *http.Request) {
+			rotationName := chi.URLParam(r, "rotationName")
+			err := display.ActivateDashboardRotation(rotationName)
+			if err != nil {
+				slog.Error(err.Error())
+				http.Error(w, err.Error(), 422)
+				return
+			}
+			w.Write([]byte(rotationName))
+		})
+		r.Post("/{rotationName}", func(w http.ResponseWriter, r *http.Request) {
+			rotationName := chi.URLParam(r, "rotationName")
+			var rotation splitflap.DashboardRotation
+			err := json.NewDecoder(r.Body).Decode(&rotation)
+			if err != nil {
+				slog.Error(err.Error())
+				http.Error(w, err.Error(), 422)
+				return
+			}
+			err = display.AddDashboardRotation(rotationName, rotation)
+			if err != nil {
+				slog.Error(err.Error())
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			w.Write([]byte(rotationName))
 		})
 	})
 	return http.ListenAndServe(":"+port, r)

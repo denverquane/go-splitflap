@@ -60,7 +60,7 @@ func (w *WeatherRoutine) Check() error {
 	return nil
 }
 
-func (w *WeatherRoutine) Start(queue chan<- Message) error {
+func (w *WeatherRoutine) Start(queue chan<- Message) {
 	w.kill = make(chan struct{})
 	go func() {
 		refreshTime := time.Now()
@@ -106,7 +106,6 @@ func (w *WeatherRoutine) Start(queue chan<- Message) error {
 			}
 		}
 	}()
-	return nil
 }
 
 func (w *WeatherRoutine) Stop() {

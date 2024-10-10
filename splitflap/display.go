@@ -6,30 +6,38 @@ import (
 	"github.com/denverquane/go-splitflap/display"
 	"github.com/denverquane/go-splitflap/routine"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 )
 
 type Display struct {
-	Size         display.Size         `json:"size"`
-	Translations map[byte]byte        `json:"translations"`
-	Dashboards   map[string]Dashboard `json:"dashboards"`
+	Size              display.Size                  `json:"size"`
+	Translations      map[string]string             `json:"translations"`
+	Dashboards        map[string]Dashboard          `json:"dashboards"`
+	DashboardRotation map[string]*DashboardRotation `json:"dashboard_rotation"`
+
+	dashboardRotationMessages chan string
 
 	filepath string
 
-	activeDashboard string
+	activeDashboard         string
+	activeDashboardRotation string
 
 	inMessages chan routine.Message
 }
 
 func NewDisplay(size display.Size) *Display {
 	return &Display{
-		Size:            size,
-		Translations:    make(map[byte]byte),
-		Dashboards:      make(map[string]Dashboard),
-		filepath:        "",
-		activeDashboard: "",
-		inMessages:      make(chan routine.Message),
+		Size:                      size,
+		Translations:              make(map[string]string),
+		Dashboards:                make(map[string]Dashboard),
+		DashboardRotation:         make(map[string]*DashboardRotation),
+		dashboardRotationMessages: make(chan string),
+		filepath:                  "",
+		activeDashboard:           "",
+		activeDashboardRotation:   "",
+		inMessages:                make(chan routine.Message),
 	}
 }
 
@@ -52,7 +60,9 @@ func LoadDisplayFromFile(path string) (*Display, error) {
 	}
 	d.filepath = path
 	d.activeDashboard = ""
+	d.activeDashboardRotation = ""
 	d.inMessages = make(chan routine.Message)
+	d.dashboardRotationMessages = make(chan string)
 	return &d, nil
 }
 
@@ -61,8 +71,27 @@ func WriteDisplayToFile(display *Display, path string) error {
 	return display.write()
 }
 
-func (d *Display) AddTranslation(src, dst byte) {
+func (d *Display) Clear() {
+	go func() {
+		d.inMessages <- routine.Message{
+			LocationSize: display.LocationSize{Location: display.Location{X: 0, Y: 0}, Size: display.Size{Width: d.Size.Height * d.Size.Width, Height: 1}}, //TODO
+			Text:         strings.Repeat(" ", d.Size.Height*d.Size.Width),
+		}
+	}()
+}
+
+func (d *Display) Set(str string) {
+	go func() {
+		d.inMessages <- routine.Message{
+			LocationSize: display.LocationSize{Location: display.Location{X: 0, Y: 0}, Size: display.Size{Width: d.Size.Height * d.Size.Width, Height: 1}}, //TODO
+			Text:         str,
+		}
+	}()
+}
+
+func (d *Display) AddTranslation(src, dst string) {
 	d.Translations[src] = dst
+	d.write()
 }
 
 func (d *Display) write() error {
@@ -112,35 +141,72 @@ func (d *Display) AddRoutineToDashboard(dashboardName string, rout routine.Routi
 	}
 }
 
-func (d *Display) DeactivateDashboard() error {
+func (d *Display) DeactivateActiveDashboard() {
 	if d.activeDashboard == "" {
-		return nil
+		return
 	}
-
-	for _, rout := range d.Dashboards[d.activeDashboard].Routines {
-		go rout.Routine.Stop()
-	}
+	dd := d.Dashboards[d.activeDashboard]
+	dd.Deactivate()
 	d.activeDashboard = ""
-	return nil
+	return
 }
 
 func (d *Display) ActivateDashboard(name string) error {
-	if d.activeDashboard != "" {
-		err := d.DeactivateDashboard()
-		if err != nil {
-			return err
-		}
-	}
+	d.DeactivateActiveDashboard()
 	if dashboard, ok := d.Dashboards[name]; !ok {
 		return errors.New("dashboard does not exist")
 	} else {
-		err := dashboard.Activate(d.inMessages)
-		if err != nil {
-			return err
-		}
+		dashboard.Activate(d.inMessages)
 		d.activeDashboard = name
 	}
 	return nil
+}
+
+func (d *Display) AddDashboardRotation(rotationName string, rot DashboardRotation) error {
+	if _, ok := d.DashboardRotation[rotationName]; ok {
+		return errors.New("dashboard rotation already exists with that name")
+	} else if len(rot.Rotation) < 2 {
+		return errors.New("2 or more dashboards are required to form a rotation")
+	} else {
+		for _, r := range rot.Rotation {
+			if _, okok := d.Dashboards[r.Name]; !okok {
+				return errors.New("dashboard in rotation does not exist")
+			}
+			if r.DurationSecs < 1 {
+				return errors.New("can't have a dashboard in a rotation with less than 1 sec duration")
+			}
+		}
+		d.DashboardRotation[rotationName] = &rot
+	}
+	return d.write()
+}
+
+func (d *Display) ActivateDashboardRotation(name string) error {
+	if rot, ok := d.DashboardRotation[name]; !ok {
+		return errors.New("no dashboard rotation with that name")
+	} else {
+		d.DeactivateActiveDashboard()
+
+		rot.Start(d.dashboardRotationMessages)
+
+		slog.Info("Dashboard Rotation Started", "name", name)
+		d.activeDashboardRotation = name
+	}
+	return nil
+}
+
+func (d *Display) DeactivateDashboardRotation() {
+	if d.activeDashboardRotation == "" {
+		return
+	}
+	if rot, ok := d.DashboardRotation[d.activeDashboardRotation]; !ok {
+		slog.Error("no dashboard rotation with the value stored as the current active")
+	} else {
+		rot.Stop()
+		d.Clear()
+		slog.Info("Dashboard Rotation Stopped", "name", d.activeDashboardRotation)
+		d.activeDashboardRotation = ""
+	}
 }
 
 func (d *Display) Run(kill <-chan struct{}, messages chan<- string) {
@@ -153,19 +219,29 @@ func (d *Display) Run(kill <-chan struct{}, messages chan<- string) {
 		select {
 		case <-kill:
 			return
+		case name := <-d.dashboardRotationMessages:
+			d.DeactivateActiveDashboard()
+			d.Clear()
+			err := d.ActivateDashboard(name)
+			if err != nil {
+				slog.Error(err.Error())
+			}
+
 		case m := <-d.inMessages:
 			if d.Translations != nil && len(d.Translations) > 0 {
 				m.Text = applyTranslations(m.Text, d.Translations)
 			}
 			copy(currentMessage[m.X:], m.Text)
+			// TODO handle height/newlines here
+
 			messages <- string(currentMessage)
 		}
 	}
 }
 
-func applyTranslations(text string, translations map[byte]byte) string {
+func applyTranslations(text string, translations map[string]string) string {
 	for src, dst := range translations {
-		text = strings.ReplaceAll(text, string(src), string(dst))
+		text = strings.ReplaceAll(text, src, dst)
 	}
 	return text
 }

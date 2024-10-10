@@ -32,7 +32,7 @@ func (t *TimerRoutine) Check() error {
 	return nil
 }
 
-func (t *TimerRoutine) Start(queue chan<- Message) error {
+func (t *TimerRoutine) Start(queue chan<- Message) {
 	t.kill = make(chan struct{})
 	go func() {
 		start := time.Now()
@@ -57,7 +57,6 @@ func (t *TimerRoutine) Start(queue chan<- Message) error {
 			time.Sleep(time.Millisecond * 500)
 		}
 	}()
-	return nil
 }
 
 func (t *TimerRoutine) Stop() {

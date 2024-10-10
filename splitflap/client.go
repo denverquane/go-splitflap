@@ -80,7 +80,7 @@ func NewSplitflapClient(cfg ClientConfig) Client {
 		previousMessage: "",
 		currentMessage:  "",
 		messageLock:     sync.Mutex{},
-		debounce:        debounce.New(time.Second),
+		debounce:        debounce.New(time.Millisecond * 250),
 	}
 }
 
