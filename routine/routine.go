@@ -16,7 +16,7 @@ type RoutineIface interface {
 	SizeRange() (display.Min, display.Max)
 	LocationSize() display.LocationSize
 	Check() error
-	Start(queue chan<- Message) error
+	Start(queue chan<- Message)
 	Stop()
 }
 
@@ -38,8 +38,9 @@ func SupportsSize(routine RoutineIface, size display.Size) bool {
 }
 
 var AllRoutines = map[RoutineType]RoutineIface{
-	TEXT:    &TextRoutine{},
-	CLOCK:   &ClockRoutine{},
-	TIMER:   &TimerRoutine{},
-	WEATHER: &WeatherRoutine{},
+	TEXT:     &TextRoutine{},
+	CLOCK:    &ClockRoutine{},
+	TIMER:    &TimerRoutine{},
+	SLOWTEXT: &SlowText{},
+	WEATHER:  &WeatherRoutine{},
 }

@@ -33,7 +33,7 @@ func (t *TextRoutine) Check() error {
 	return nil
 }
 
-func (t *TextRoutine) Start(queue chan<- Message) error {
+func (t *TextRoutine) Start(queue chan<- Message) {
 	refreshTime := time.Now()
 	t.kill = make(chan struct{})
 	go func() {
@@ -55,7 +55,6 @@ func (t *TextRoutine) Start(queue chan<- Message) error {
 			}
 		}
 	}()
-	return nil
 }
 
 func (t *TextRoutine) Stop() {

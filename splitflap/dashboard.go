@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/denverquane/go-splitflap/routine"
+	"log/slog"
 	"reflect"
+	"sync"
 )
 
 type Dashboard struct {
 	Routines []routine.Routine `json:"routines"`
+	active   bool
 }
 
 func (d *Dashboard) UnmarshalJSON(data []byte) error {
@@ -44,10 +47,19 @@ func (d *Dashboard) UnmarshalJSON(data []byte) error {
 func (d *Dashboard) AddRoutine(rout routine.Routine) error {
 	if _, ok := routine.AllRoutines[rout.Type]; !ok {
 		return errors.New("unrecognized routine type")
+	} else if d.active {
+		return errors.New("cant add a routine to an already active dashboard")
 	} else {
-		for _, r := range d.Routines {
+		for i, r := range d.Routines {
 			if r.Name == rout.Name {
-				return errors.New("routine with that name already exists in this dashboard")
+				slog.Info("routine found with that name already; overwriting")
+				err := rout.Routine.Check()
+				if err != nil {
+					return err
+				}
+				r.Routine = rout.Routine
+				d.Routines[i] = r
+				return nil
 			}
 		}
 		err := rout.Routine.Check()
@@ -59,13 +71,28 @@ func (d *Dashboard) AddRoutine(rout routine.Routine) error {
 	}
 }
 
-func (d *Dashboard) Activate(messageQueue chan<- routine.Message) error {
-	for r, rout := range d.Routines {
-		err := rout.Routine.Start(messageQueue)
-		if err != nil {
-			return err
-		}
-		d.Routines[r] = rout
+func (d *Dashboard) Activate(messageQueue chan<- routine.Message) {
+	wg := sync.WaitGroup{}
+	for _, rout := range d.Routines {
+		go func(r routine.RoutineIface) {
+			wg.Add(1)
+			r.Start(messageQueue)
+			wg.Done()
+		}(rout.Routine)
 	}
-	return nil
+	wg.Wait()
+	d.active = true
+}
+
+func (d *Dashboard) Deactivate() {
+	wg := sync.WaitGroup{}
+	for _, rout := range d.Routines {
+		go func(r routine.RoutineIface) {
+			wg.Add(1)
+			r.Stop()
+			wg.Done()
+		}(rout.Routine)
+	}
+	wg.Wait()
+	d.active = false
 }

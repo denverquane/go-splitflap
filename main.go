@@ -5,6 +5,7 @@ import (
 	"github.com/denverquane/go-splitflap/server"
 	"github.com/denverquane/go-splitflap/splitflap"
 	"log/slog"
+	"os"
 )
 
 const DisplayFile = "display.json"
@@ -27,15 +28,19 @@ func main() {
 	hub, err := splitflap.LoadDisplayFromFile(DisplayFile)
 	if err != nil {
 		slog.Error("error loading display from json file", "json file", DisplayFile, "error", err.Error())
-		slog.Info("creating new display and writing to file", "json file", DisplayFile)
-		hub = splitflap.NewDisplay(display.Size{
-			Width:  6,
-			Height: 1,
-		})
-		err = splitflap.WriteDisplayToFile(hub, DisplayFile)
-		if err != nil {
-			slog.Error(err.Error())
-			return
+		if _, err = os.Stat(DisplayFile); os.IsNotExist(err) {
+			slog.Info("file not found, creating new display and writing to file", "json file", DisplayFile)
+			hub = splitflap.NewDisplay(display.Size{
+				Width:  6,
+				Height: 1,
+			})
+			err = splitflap.WriteDisplayToFile(hub, DisplayFile)
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
+		} else {
+			slog.Error("file found, but contents cannot be parsed! Exiting!")
 		}
 	}
 
