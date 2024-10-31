@@ -89,11 +89,6 @@ func (d *Display) Set(str string) {
 	}()
 }
 
-func (d *Display) AddTranslation(src, dst string) {
-	d.Translations[src] = dst
-	d.write()
-}
-
 func (d *Display) write() error {
 	if d.filepath == "" {
 		return errors.New("filepath not set in Display struct")
@@ -209,7 +204,7 @@ func (d *Display) DeactivateDashboardRotation() {
 	}
 }
 
-func (d *Display) Run(kill <-chan struct{}, messages chan<- string) {
+func (d *Display) Run(messages chan<- string) {
 	currentMessage := make([]byte, d.Size.Height*d.Size.Width)
 	for i := range currentMessage {
 		currentMessage[i] = ' ' // ASCII value for space is 32
@@ -217,8 +212,6 @@ func (d *Display) Run(kill <-chan struct{}, messages chan<- string) {
 
 	for {
 		select {
-		case <-kill:
-			return
 		case name := <-d.dashboardRotationMessages:
 			d.DeactivateActiveDashboard()
 			d.Clear()

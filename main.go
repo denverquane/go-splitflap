@@ -11,19 +11,16 @@ import (
 const DisplayFile = "display.json"
 
 func main() {
-	cfg, err := splitflap.ClientConfigFromEnv()
+	splitflapClient := splitflap.NewSplitflapClient()
+	err := splitflapClient.Connect("COM5")
 	if err != nil {
-		slog.Error("Error creating Splitflap Client Config from env", "error", err.Error())
+		slog.Error(err.Error())
 		return
 	}
-	splitflapClient := splitflap.NewSplitflapClient(*cfg)
-
-	killClientChan := make(chan struct{})
-	killDisplayChan := make(chan struct{})
 
 	messages := make(chan string)
 
-	go splitflapClient.Run(killClientChan, messages)
+	go splitflapClient.Run(messages)
 
 	hub, err := splitflap.LoadDisplayFromFile(DisplayFile)
 	if err != nil {
@@ -31,7 +28,7 @@ func main() {
 		if _, err = os.Stat(DisplayFile); os.IsNotExist(err) {
 			slog.Info("file not found, creating new display and writing to file", "json file", DisplayFile)
 			hub = splitflap.NewDisplay(display.Size{
-				Width:  6,
+				Width:  12,
 				Height: 1,
 			})
 			err = splitflap.WriteDisplayToFile(hub, DisplayFile)
@@ -44,13 +41,10 @@ func main() {
 		}
 	}
 
-	go hub.Run(killDisplayChan, messages)
+	go hub.Run(messages)
 
 	err = server.Run("3000", hub)
 	if err != nil {
 		slog.Error(err.Error())
 	}
-
-	killClientChan <- struct{}{}
-	killDisplayChan <- struct{}{}
 }

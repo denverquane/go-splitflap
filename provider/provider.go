@@ -1,7 +1,8 @@
 package provider
 
 type ProviderIface interface {
-	AddSubscriber(chan any)
+	AddSubscriber(chan any) string
+	RemoveSubscriber(id string)
 	Start() error
 	Stop()
 }
