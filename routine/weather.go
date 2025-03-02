@@ -108,6 +108,10 @@ func (w *WeatherRoutine) Start(queue chan<- Message) {
 	}()
 }
 
+func (w *WeatherRoutine) SetState(_ string) {
+	return
+}
+
 func (w *WeatherRoutine) Stop() {
 	w.kill <- struct{}{}
 }

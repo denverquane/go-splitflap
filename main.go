@@ -11,14 +11,16 @@ import (
 const DisplayFile = "display.json"
 
 func main() {
+	state := make(chan string)
+
 	splitflapClient := splitflap.NewSplitflapClient()
-	err := splitflapClient.Connect("COM5")
+	err := splitflapClient.Connect("COM5", state)
 	if err != nil {
 		slog.Error(err.Error())
 		return
 	}
 
-	messages := make(chan string)
+	messages := make(chan splitflap.OutMessage)
 
 	go splitflapClient.Run(messages)
 
@@ -41,7 +43,13 @@ func main() {
 		}
 	}
 
-	go hub.Run(messages)
+	err = hub.Providers.Start()
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
+	go hub.Run(messages, state)
 
 	err = server.Run("3000", hub)
 	if err != nil {

@@ -59,6 +59,10 @@ func (t *TimerRoutine) Start(queue chan<- Message) {
 	}()
 }
 
+func (t *TimerRoutine) SetState(_ string) {
+	return
+}
+
 func (t *TimerRoutine) Stop() {
 	t.kill <- struct{}{}
 }

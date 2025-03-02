@@ -2,6 +2,8 @@ package provider
 
 import (
 	"errors"
+	"fmt"
+	"github.com/briandowns/openweathermap"
 	"github.com/google/uuid"
 	"log/slog"
 	"os"
@@ -9,11 +11,23 @@ import (
 	"time"
 )
 
-type WeatherProvider struct {
-	PollRateSecs int    `json:"poll_rate_secs"`
-	LocationID   int    `json:"location_id"`
-	Units        string `json:"units"`
+const WEATHER ProviderType = "WEATHER"
 
+type WeatherType string
+
+const (
+	CURRENT WeatherType = "CURRENT"
+	HIGH    WeatherType = "HIGH"
+	LOW     WeatherType = "LOW"
+)
+
+type WeatherProvider struct {
+	PollRateSecs int         `json:"poll_rate_secs"`
+	LocationID   int         `json:"location_id"`
+	Units        string      `json:"units"`
+	Type         WeatherType `json:"type"`
+
+	lastValue   float64
 	kill        chan struct{}
 	subscribers map[string]chan any
 	subLock     sync.RWMutex
@@ -24,6 +38,9 @@ func (wp *WeatherProvider) AddSubscriber(s chan any) string {
 
 	wp.subLock.Lock()
 	wp.subscribers[id] = s
+
+	s <- wp.lastValue
+
 	wp.subLock.Unlock()
 
 	return id
@@ -31,6 +48,9 @@ func (wp *WeatherProvider) AddSubscriber(s chan any) string {
 
 func (wp *WeatherProvider) RemoveSubscriber(id string) {
 	wp.subLock.Lock()
+	if v, ok := wp.subscribers[id]; ok {
+		close(v)
+	}
 	delete(wp.subscribers, id)
 	wp.subLock.Unlock()
 }
@@ -40,6 +60,17 @@ func (wp *WeatherProvider) Start() error {
 	if apiKey == "" {
 		return errors.New("OWM_API_KEY is not set, can't start weather provider")
 	}
+	var err error
+	var current *openweathermap.CurrentWeatherData
+	var forecast *openweathermap.ForecastWeatherData
+	if wp.Type == CURRENT {
+		current, err = openweathermap.NewCurrent(wp.Units, "en", apiKey)
+	} else {
+		forecast, err = openweathermap.NewForecast("5", wp.Units, "en", apiKey)
+	}
+	if err != nil {
+		return err
+	}
 	wp.kill = make(chan struct{})
 	go func() {
 		refreshTime := time.Now()
@@ -47,27 +78,58 @@ func (wp *WeatherProvider) Start() error {
 			select {
 			case <-wp.kill:
 				slog.Info("weather provider received kill signal, exiting")
+				wp.subLock.RLock()
+				wp.closeSubChans()
+				wp.subLock.RUnlock()
 				return
 			default:
 				now := time.Now()
 				if now.After(refreshTime) {
-					// TODO do work
-
-					wp.subLock.RLock()
-					for _, v := range wp.subscribers {
-						v <- 5
+					var value float64
+					if wp.Type == CURRENT {
+						err = current.CurrentByID(wp.LocationID)
+						value = current.Main.Temp
+					} else {
+						err = forecast.DailyByID(wp.LocationID, 1)
+						if val, ok := forecast.ForecastWeatherJson.(*openweathermap.Forecast5WeatherData); ok {
+							fmt.Println(val)
+							fmt.Println(val.City)
+							fmt.Println(val.Cnt)
+							if val.Cnt > 0 && len(val.List) > 0 {
+								if wp.Type == HIGH {
+									value = val.List[0].Main.TempMax
+								} else if wp.Type == LOW {
+									value = val.List[0].Main.TempMax
+								}
+							}
+						}
 					}
-					wp.subLock.RUnlock()
+					if err != nil {
+						slog.Error(err.Error())
+					} else {
+						slog.Info("Weather provider reported temp", "Type", wp.Type, "value", value)
+						wp.subLock.Lock()
+						for _, v := range wp.subscribers {
+							v <- value
+						}
+						wp.lastValue = value
+						wp.subLock.Unlock()
+					}
 					refreshTime = now.Add(time.Second * time.Duration(wp.PollRateSecs))
 				}
 				time.Sleep(time.Second)
 			}
 		}
-
 	}()
 	return nil
 }
 
 func (wp *WeatherProvider) Stop() {
 	wp.kill <- struct{}{}
+}
+
+func (wp *WeatherProvider) closeSubChans() {
+	for _, v := range wp.subscribers {
+		close(v)
+	}
 }

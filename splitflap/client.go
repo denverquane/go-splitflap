@@ -5,63 +5,58 @@ import (
 	"github.com/bep/debounce"
 	"github.com/denverquane/go-splitflap/serdiev/usb_serial"
 	"log/slog"
-	"sync"
 	"time"
 )
 
+type OutMessage struct {
+	payload string
+}
+
 type Client struct {
-	serial         *usb_serial.Splitflap
-	currentMessage string
-	messageLock    sync.Mutex
-	debounce       func(func())
+	serial   *usb_serial.Splitflap
+	lastSent string
+	debounce func(func())
 }
 
 func NewSplitflapClient() Client {
 	return Client{
-		serial:         nil,
-		currentMessage: "",
-		messageLock:    sync.Mutex{},
-		debounce:       debounce.New(time.Millisecond * 250),
+		serial:   nil,
+		lastSent: "",
+		debounce: debounce.New(time.Millisecond * 200),
 	}
 }
 
-func (c *Client) Connect(port string) error {
+func (c *Client) Connect(port string, notify chan string) error {
 	connection := usb_serial.NewSerialConnectionOnPort(port)
 	if connection == nil {
 		return errors.New("couldn't connect over USB")
 	}
-	sf := usb_serial.NewSplitflap(connection)
+	sf := usb_serial.NewSplitflap(connection, notify)
 	sf.Start()
 
 	c.serial = sf
 	return nil
 }
 
-func (c *Client) Run(messages <-chan string) {
+func (c *Client) Run(outmessages <-chan OutMessage) {
 	if c.serial == nil {
 		slog.Error("Tried to start Client with a nil serial connection, exiting")
 		return
 	}
 	for {
 		select {
-		case msg := <-messages:
-			c.messageLock.Lock()
-			c.currentMessage = msg
-			c.messageLock.Unlock()
-			// debounce the publish so we're not constantly spamming our splitflap with messages,
-			// when we could consolidate them into a single send
-			c.debounce(c.publishCurrentMessage)
-		default:
-			time.Sleep(time.Millisecond * 100)
+		case msg := <-outmessages:
+			if msg.payload != c.lastSent {
+				// debounce the publish so we're not constantly spamming our splitflap with messages,
+				// when we could just consolidate them into a single send
+				//c.debounce(func() {
+				c.lastSent = msg.payload
+				err := c.serial.SetTextWithMovement(msg.payload, usb_serial.ForceMovementNone)
+				if err != nil {
+					slog.Error(err.Error())
+				}
+				//})
+			}
 		}
-	}
-}
-
-func (c *Client) publishCurrentMessage() {
-	c.messageLock.Lock()
-	err := c.serial.SetText(c.currentMessage)
-	c.messageLock.Unlock()
-	if err != nil {
-		slog.Error(err.Error())
 	}
 }

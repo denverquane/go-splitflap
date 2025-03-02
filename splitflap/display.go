@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"github.com/denverquane/go-splitflap/routine"
 	"io"
 	"log/slog"
@@ -14,8 +15,10 @@ import (
 type Display struct {
 	Size              display.Size                  `json:"size"`
 	Translations      map[string]string             `json:"translations"`
+	Providers         provider.Providers            `json:"providers"`
 	Dashboards        map[string]Dashboard          `json:"dashboards"`
 	DashboardRotation map[string]*DashboardRotation `json:"dashboard_rotation"`
+	Layout            []int                         `json:"layout"`
 
 	dashboardRotationMessages chan string
 
@@ -28,12 +31,18 @@ type Display struct {
 }
 
 func NewDisplay(size display.Size) *Display {
+	layout := make([]int, size.Height*size.Width)
+	for i := range layout {
+		layout[i] = i
+	}
 	return &Display{
 		Size:                      size,
 		Translations:              make(map[string]string),
+		Providers:                 provider.Providers{},
 		Dashboards:                make(map[string]Dashboard),
 		DashboardRotation:         make(map[string]*DashboardRotation),
 		dashboardRotationMessages: make(chan string),
+		Layout:                    layout,
 		filepath:                  "",
 		activeDashboard:           "",
 		activeDashboardRotation:   "",
@@ -56,6 +65,10 @@ func LoadDisplayFromFile(path string) (*Display, error) {
 	var d Display
 	err = json.Unmarshal(bytes, &d)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := validateLayout(d.Size, d.Layout); err != nil {
 		return nil, err
 	}
 	d.filepath = path
@@ -204,11 +217,8 @@ func (d *Display) DeactivateDashboardRotation() {
 	}
 }
 
-func (d *Display) Run(messages chan<- string) {
-	currentMessage := make([]byte, d.Size.Height*d.Size.Width)
-	for i := range currentMessage {
-		currentMessage[i] = ' ' // ASCII value for space is 32
-	}
+func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
+	currentMessage := initMessage(d.Size)
 
 	for {
 		select {
@@ -220,16 +230,33 @@ func (d *Display) Run(messages chan<- string) {
 				slog.Error(err.Error())
 			}
 
+		case s := <-state:
+			if d.activeDashboard != "" {
+				dash := d.Dashboards[d.activeDashboard]
+				dash.SetState(d.Size, s)
+			}
+
 		case m := <-d.inMessages:
 			if d.Translations != nil && len(d.Translations) > 0 {
 				m.Text = applyTranslations(m.Text, d.Translations)
 			}
-			copy(currentMessage[m.X:], m.Text)
-			// TODO handle height/newlines here
+			currentMessage = mergeMessageToCurrentText(d.Size, currentMessage, m)
 
-			messages <- string(currentMessage)
+			currentMessage = arrangeToLayout(currentMessage, d.Layout)
+
+			messages <- OutMessage{
+				payload: string(currentMessage),
+			}
 		}
 	}
+}
+
+func initMessage(size display.Size) []byte {
+	currentMessage := make([]byte, size.Height*size.Width)
+	for i := range currentMessage {
+		currentMessage[i] = ' ' // ASCII value for space is 32
+	}
+	return currentMessage
 }
 
 func applyTranslations(text string, translations map[string]string) string {
@@ -237,4 +264,30 @@ func applyTranslations(text string, translations map[string]string) string {
 		text = strings.ReplaceAll(text, src, dst)
 	}
 	return text
+}
+
+func mergeMessageToCurrentText(displaySize display.Size, current []byte, msg routine.Message) []byte {
+	copy(current[msg.Y*displaySize.Width+msg.X:], msg.Text)
+	return current
+}
+
+func validateLayout(size display.Size, layout []int) error {
+	if len(layout) != size.Height*size.Width {
+		return errors.New("invalid layout size, does not match width*height")
+	}
+	for _, v := range layout {
+		if v < 0 || v >= size.Height*size.Width {
+			return errors.New("invalid layout value provided, is greater or less than display dimensions")
+		}
+	}
+	return nil
+}
+
+func arrangeToLayout(current []byte, layout []int) []byte {
+	final := make([]byte, len(current))
+
+	for i := range layout {
+		final[i] = current[layout[i]]
+	}
+	return final
 }
