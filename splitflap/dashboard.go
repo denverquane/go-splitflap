@@ -3,6 +3,7 @@ package splitflap
 import (
 	"encoding/json"
 	"errors"
+	"github.com/denverquane/go-splitflap/display"
 	"github.com/denverquane/go-splitflap/routine"
 	"log/slog"
 	"reflect"
@@ -95,4 +96,25 @@ func (d *Dashboard) Deactivate() {
 	}
 	wg.Wait()
 	d.active = false
+}
+
+func (d *Dashboard) SetState(displaySize display.Size, state string) {
+	go func() {
+		for _, rout := range d.Routines {
+			locsize := rout.Routine.LocationSize()
+			subsetState := relevantStateSubset(displaySize, locsize, state)
+			rout.Routine.SetState(subsetState)
+		}
+	}()
+}
+
+func relevantStateSubset(displaySize display.Size, locsize display.LocationSize, state string) string {
+	newState := ""
+	for y := range locsize.Height {
+		start := ((locsize.Y + y) * displaySize.Width) + locsize.X
+		end := start + locsize.Width
+		newState += state[start:end]
+	}
+
+	return newState
 }

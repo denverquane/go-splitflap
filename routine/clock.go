@@ -83,6 +83,10 @@ func (c *ClockRoutine) Stop() {
 	c.kill <- struct{}{}
 }
 
+func (c *ClockRoutine) SetState(_ string) {
+	return
+}
+
 func (c *ClockRoutine) getFormatString() string {
 	if c.Military {
 		return "15:04"

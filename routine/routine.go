@@ -17,6 +17,7 @@ type RoutineIface interface {
 	LocationSize() display.LocationSize
 	Check() error
 	Start(queue chan<- Message)
+	SetState(state string)
 	Stop()
 }
 

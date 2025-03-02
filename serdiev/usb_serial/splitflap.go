@@ -16,8 +16,11 @@ const (
 	ForceMovementNone ForceMovement = iota
 	ForceMovementOnlyNonBlank
 	ForceMovementAll
-	RetryTime = time.Millisecond * 500
+	RetryTime     = time.Millisecond * 500
+	HoldCharacter = uint32('a')
 )
+
+var GlobalAlphabet []rune
 
 type ForceMovement int
 
@@ -35,19 +38,21 @@ type Splitflap struct {
 	lock          sync.Mutex
 	currentConfig *gen.SplitflapConfig
 	numModules    int
-	alphabet      []rune
+	notify        chan string
 }
 
-func NewSplitflap(serialInstance SerialConnection) *Splitflap {
+func NewSplitflap(serialInstance SerialConnection, notify chan string) *Splitflap {
 	s := &Splitflap{
 		serial:        serialInstance,
 		outQueue:      make(chan EnqueuedMessage, 100),
 		ackQueue:      make(chan uint32, 100),
 		nextNonce:     uint32(rand.Intn(256)),
-		run:           true,
+		run:           false,
 		currentConfig: nil,
-		alphabet:      nil,
+		notify:        notify,
 	}
+
+	//s.initializeModuleList(12)
 
 	return s
 }
@@ -109,6 +114,7 @@ func (sf *Splitflap) processFrame(decoded []byte) {
 		slog.Error("Failed to unmarshal", "error", err, "payload", payload)
 		return
 	}
+
 	message.PrintSplitflapState()
 
 	switch message.GetPayload().(type) {
@@ -116,23 +122,32 @@ func (sf *Splitflap) processFrame(decoded []byte) {
 		nonce := message.GetAck().GetNonce()
 		sf.ackQueue <- nonce
 	case *gen.FromSplitflap_GeneralState:
-		if sf.alphabet == nil {
+		if GlobalAlphabet == nil {
 			chars := message.GetGeneralState().GetFlapCharacterSet()
-			sf.alphabet = make([]rune, len(chars))
+			GlobalAlphabet = make([]rune, len(chars))
 			for i, v := range chars {
-				sf.alphabet[i] = rune(v)
+				GlobalAlphabet[i] = rune(v)
 			}
-			slog.Info("Set Alphabet using received General State")
+			slog.Info("Set Alphabet using state received from Splitflap", "characters", string(GlobalAlphabet))
 		}
 
 	case *gen.FromSplitflap_SplitflapState:
-		numModulesReported := len(message.GetSplitflapState().GetModules())
+		modules := message.GetSplitflapState().GetModules()
+		numModulesReported := len(modules)
 
 		if sf.numModules == 0 {
 			sf.initializeModuleList(numModulesReported)
-			slog.Info("Set Module count using received Splitflap State")
+			slog.Info("Set Module count using state received from splitflap", "modules", numModulesReported)
 		} else if sf.numModules != numModulesReported {
 			slog.Info("Number of reported modules changed", "old", sf.numModules, "new", numModulesReported)
+		}
+
+		if GlobalAlphabet != nil && sf.notify != nil {
+			msg := make([]rune, len(modules))
+			for i, module := range modules {
+				msg[i] = GlobalAlphabet[module.GetFlapIndex()]
+			}
+			sf.notify <- string(msg)
 		}
 	}
 }
@@ -194,20 +209,23 @@ func (sf *Splitflap) writeLoop() {
 }
 
 func (sf *Splitflap) SetText(text string) error {
-	return sf.setTextWithMovement(text, ForceMovementOnlyNonBlank)
+	return sf.SetTextWithMovement(text, ForceMovementNone)
 }
 
-func (sf *Splitflap) setTextWithMovement(text string, forceMovement ForceMovement) error {
+func (sf *Splitflap) SetTextWithMovement(text string, forceMovement ForceMovement) error {
 	// Transform text to a list of flap indexes (and pad with blanks so that all modules get updated even if text is shorter)
 	var positions []uint32
 	for _, c := range text {
-		idx := sf.alphabetIndex(c)
+		idx := uint32(AlphabetIndex(c))
+		if uint32(c) == HoldCharacter {
+			idx = HoldCharacter
+		}
 		positions = append(positions, idx)
 	}
 
 	// Pad with blanks if text is shorter than the number of modules
 	for i := len(text); i < sf.numModules; i++ {
-		positions = append(positions, sf.alphabetIndex(' '))
+		positions = append(positions, uint32(AlphabetIndex(' ')))
 	}
 
 	var forceMovementList []bool
@@ -216,7 +234,7 @@ func (sf *Splitflap) setTextWithMovement(text string, forceMovement ForceMovemen
 		forceMovementList = nil
 	case ForceMovementOnlyNonBlank:
 		for _, c := range text {
-			forceMovementList = append(forceMovementList, sf.alphabetIndex(c) != 0)
+			forceMovementList = append(forceMovementList, AlphabetIndex(c) != 0 && uint32(c) != HoldCharacter)
 		}
 		// Pad with false if text is shorter than the number of modules
 		for i := len(text); i < sf.numModules; i++ {
@@ -232,6 +250,20 @@ func (sf *Splitflap) setTextWithMovement(text string, forceMovement ForceMovemen
 	}
 
 	return sf.setPositions(positions, forceMovementList)
+}
+
+func (sf *Splitflap) SpinCharacter(idx int) {
+	sf.lock.Lock()
+	defer sf.lock.Unlock()
+
+	sf.currentConfig.Modules[idx].MovementNonce = (sf.currentConfig.Modules[idx].MovementNonce + 1) % 256
+	message := &gen.ToSplitflap{
+		Payload: &gen.ToSplitflap_SplitflapConfig{
+			SplitflapConfig: sf.currentConfig,
+		},
+	}
+
+	sf.enqueueMessage(message)
 }
 
 func (sf *Splitflap) setPositions(positions []uint32, forceMovementList []bool) error {
@@ -250,10 +282,12 @@ func (sf *Splitflap) setPositions(positions []uint32, forceMovementList []bool) 
 		return errors.New("positions and forceMovementList length must match")
 	}
 
-	for i := 0; i < len(positions); i++ {
-		sf.currentConfig.Modules[i].TargetFlapIndex = positions[i]
-		if forceMovementList != nil && forceMovementList[i] {
-			sf.currentConfig.Modules[i].MovementNonce = (sf.currentConfig.Modules[i].MovementNonce + 1) % 256
+	for i, v := range positions {
+		if v != HoldCharacter {
+			sf.currentConfig.Modules[i].TargetFlapIndex = v
+			if forceMovementList != nil && forceMovementList[i] {
+				sf.currentConfig.Modules[i].MovementNonce = (sf.currentConfig.Modules[i].MovementNonce + 1) % 256
+			}
 		}
 	}
 
@@ -292,35 +326,27 @@ func (sf *Splitflap) enqueueMessage(message *gen.ToSplitflap) {
 	}
 }
 
-func (sf *Splitflap) requestState() {
-	message := gen.ToSplitflap{}
-	message.Payload = &gen.ToSplitflap_RequestState{
-		RequestState: &gen.RequestState{},
-	}
-
-	sf.enqueueMessage(&message)
-}
-
-func (sf *Splitflap) alphabetIndex(c rune) uint32 {
-	for i, char := range sf.alphabet {
+func AlphabetIndex(c rune) int {
+	for i, char := range GlobalAlphabet {
 		if char == c {
-			return uint32(i)
+			return i
 		}
 	}
 
 	return 0 // Default to 0 if character not found in alphabet
 }
 
-func (sf *Splitflap) Start() {
-	go sf.readLoop()
-	go sf.writeLoop()
-	sf.requestState()
+func AlphabetDistance(a, b rune) int {
+	aIdx := AlphabetIndex(a)
+	bIdx := AlphabetIndex(b)
+	if bIdx < aIdx {
+		return (len(GlobalAlphabet) - aIdx) + bIdx
+	}
+	return bIdx - aIdx
 }
 
-func (sf *Splitflap) Shutdown() {
-	slog.Info("Shutting down...")
-	sf.run = false
-	sf.serial.Close()
-	close(sf.outQueue)
-	close(sf.ackQueue)
+func (sf *Splitflap) Start() {
+	sf.run = true
+	go sf.readLoop()
+	go sf.writeLoop()
 }

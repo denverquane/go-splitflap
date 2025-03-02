@@ -57,6 +57,10 @@ func (t *TextRoutine) Start(queue chan<- Message) {
 	}()
 }
 
+func (t *TextRoutine) SetState(_ string) {
+	return
+}
+
 func (t *TextRoutine) Stop() {
 	t.kill <- struct{}{}
 }
