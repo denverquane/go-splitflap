@@ -1,0 +1,1 @@
+This code was adapted from code graciously provided by Serdiev in https://github.com/Serdiev/splitflap-backend
