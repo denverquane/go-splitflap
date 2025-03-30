@@ -9,7 +9,8 @@ export default function AppLayout() {
     const location = useLocation();
     const showStatus = location.pathname.startsWith('/dashboards') ||
         location.pathname.startsWith('/rotations') ||
-        location.pathname.startsWith('/routines');
+        location.pathname.startsWith('/routines') ||
+        location.pathname.startsWith('/settings');
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -33,6 +34,7 @@ export default function AppLayout() {
                             <Link to="/routines" className="hover:text-primary font-medium">Routines</Link>
                             <Link to="/dashboards" className="hover:text-primary font-medium">Dashboards</Link>
                             <Link to="/rotations" className="hover:text-primary font-medium">Rotations</Link>
+                            <Link to="/settings" className="hover:text-primary font-medium">Settings</Link>
                         </div>
                     </nav>
                 </div>

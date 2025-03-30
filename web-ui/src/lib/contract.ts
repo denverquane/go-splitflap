@@ -17,6 +17,25 @@ export const displayContract = c.router({
         500: z.string(),
       },
     },
+    getTranslations: {
+      method: "GET",
+      path: "/display/translations",
+      responses: {
+        200: z.record(z.string(), z.string()),
+        404: z.string(),
+        500: z.string(),
+      },
+    },
+    updateTranslations: {
+      method: "POST",
+      path: "/display/translations",
+      body: z.record(z.string(), z.string()),
+      responses: {
+        200: z.object({ status: z.literal("ok") }),
+        400: z.string(),
+        500: z.string(),
+      },
+    },
     getDashboards: {
       method: "GET",
       path: "/dashboards",

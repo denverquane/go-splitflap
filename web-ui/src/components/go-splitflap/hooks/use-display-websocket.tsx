@@ -46,7 +46,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       }
 
       // For development with a proxied backend, adjust URL if needed
-      const wsUrl = 'ws://localhost:3000/ws';
+      const wsUrl = 'ws://10.0.0.166:3000/ws';
       
       console.log('Creating new WebSocket connection...');
       const socket = new WebSocket(wsUrl);

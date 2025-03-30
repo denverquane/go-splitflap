@@ -111,7 +111,8 @@ export default function DashboardsPage() {
                         id: `${name}-routine-${idx}`,
                         type: routine.type,
                         location: routine.location,
-                        size: routine.size
+                        size: routine.size,
+                        routine: routine.routine
                       }))}
                     />
                   ) : (

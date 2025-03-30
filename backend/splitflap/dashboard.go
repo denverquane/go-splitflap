@@ -20,7 +20,7 @@ type DashboardMessage struct {
 }
 
 // we want a special unmarshaller so we can take generic Routines (whose types/underlying implementations we aren't certain
-// of yet when they're in JSON form) and convert them dynamically we know the type field
+// of yet when they're in JSON form) and convert them dynamically once we know the type field
 func (d *Dashboard) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		Routines []routine.RoutineJSON `json:"routines"`

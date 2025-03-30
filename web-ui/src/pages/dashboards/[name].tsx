@@ -112,6 +112,7 @@ export default function DashboardDetailPage() {
                       type: r.type,
                       location: r.location,
                       size: r.size,
+                      routine: r.routine
                     }))}
                   />
                 ) : (

@@ -103,6 +103,10 @@ func (d *Display) GetState() string {
 	return d.state
 }
 
+func (d *Display) GetFilepath() string {
+	return d.filepath
+}
+
 func (d *Display) SetStateSubscriber(s chan struct{}) {
 	d.stateSubscriber = s
 }
@@ -257,7 +261,7 @@ func (d *Display) DeactivateDashboardRotation() {
 }
 
 func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
-	currentMessage := initMessage(d.Size)
+
 	// TODO what if our display is already running when we change the layout?
 	invLayout := invertLayout(d.Layout)
 
@@ -296,6 +300,7 @@ func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
 			if len(msgs) == 0 {
 				break
 			}
+			currentMessage := initMessage(d.Size)
 			for _, m := range msgs {
 				// TODO should also make sure the routine sends back *enough* text to fill its specified size?
 				if len(m.Text) > m.Width*m.Height {

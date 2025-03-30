@@ -1,4 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
+import { client } from '@/providers';
+import { displayContract } from '@/lib/contract';
 import { generateRandomColor } from '@/utils/colors';
 import { Size, Location } from '@/models/Dashboard';
 
@@ -10,10 +12,42 @@ interface DisplayPreviewProps {
     type: string;
     location: Location;
     size: Size;
+    routine?: any; // Optional routine data that contains type-specific properties like text
   }>;
 }
 
 const DisplayPreview: React.FC<DisplayPreviewProps> = ({ width, height, routineLocations = [] }) => {
+  const [translations, setTranslations] = useState<Record<string, string>>({
+    '@': '~', // Default fallback translations
+    '°': 'd',
+  });
+  
+  // Fetch translations from the backend
+  useEffect(() => {
+    const fetchTranslations = async () => {
+      try {
+        const response = await fetch('/api/display/translations');
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Convert any numeric values to their corresponding characters
+          const formattedData: Record<string, string> = {};
+          Object.entries(data).forEach(([key, value]) => {
+            const sourceChar = typeof key === 'number' ? String.fromCodePoint(key) : key;
+            const targetChar = typeof value === 'number' ? String.fromCodePoint(value) : String(value);
+            formattedData[sourceChar] = targetChar;
+          });
+          
+          setTranslations(formattedData);
+        }
+      } catch (error) {
+        console.error('Error fetching translations:', error);
+      }
+    };
+    
+    fetchTranslations();
+  }, []);
+
   // Ensure routineLocations is an array (could be undefined from parent component)
   const locations = Array.isArray(routineLocations) ? routineLocations : [];
   // Create a map to track which cells are affected by which routines
@@ -45,10 +79,34 @@ const DisplayPreview: React.FC<DisplayPreviewProps> = ({ width, height, routineL
           
           // Check that we're within the display bounds
           if (cellY >= 0 && cellY < height && cellX >= 0 && cellX < width) {
+            // For TEXT routines, distribute characters to cells
+            const textContent = routine.type === 'TEXT' && routine.routine?.text ? routine.routine.text : null;
+            
+            // Calculate character position in the text (if TEXT type)
+            let char = null;
+            if (textContent) {
+              // First, convert explicit newlines to spaces to get the full string
+              const flatText = textContent.replace(/\n/g, ' ');
+              
+              // Calculate relative position within the routine area
+              const charIndex = rx + (ry * routine.size.width);
+              
+              // Check if the index is within the text's length
+              if (charIndex < flatText.length) {
+                const originalChar = flatText.charAt(charIndex);
+                // Apply character mapping if it exists
+                char = translations[originalChar] || originalChar;
+              } else {
+                char = ' '; // Pad with spaces
+              }
+            }
+            
             cellMap[cellY][cellX] = {
               routineId: routineId,
               type: routine.type,
               color: routineColor,
+              routine: routine.routine,
+              char: char,
             };
           }
         }
@@ -83,14 +141,22 @@ const DisplayPreview: React.FC<DisplayPreviewProps> = ({ width, height, routineL
                 className="border border-border flex items-center justify-center overflow-hidden"
                 style={{ 
                   aspectRatio: '1/1',
-                  backgroundColor: cell.color,
+                  backgroundColor: cell.type === 'TEXT' ? 'transparent' : cell.color,
                   position: 'relative',
                 }}
                 title={`${cell.type} at ${positionLabel}`}
               >
-                <span className="text-xs text-white font-bold truncate px-1 uppercase">
-                  {cell.type.charAt(0)}
-                </span>
+                {cell.type === 'TEXT' && cell.char !== null ? (
+                  <div className="w-full h-full bg-black flex items-center justify-center">
+                    <span className="text-base text-white font-mono font-bold">
+                      {cell.char}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-white font-bold truncate px-1 uppercase">
+                    {cell.type.charAt(0)}
+                  </span>
+                )}
               </div>
             );
           } else {
