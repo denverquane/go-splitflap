@@ -564,9 +564,63 @@ const DashboardBuilder: React.FC<DashboardBuilderProps> = ({
                         onMouseDown={(e) => handleDragStart(e, routine.id)}
                         title={isAtSizeLimit ? `This routine has reached a size limit (min: ${minWidth}x${minHeight}, max: ${maxWidth}x${maxHeight})` : undefined}
                       >
-                        <div className="text-xs font-medium text-white truncate px-2">
-                          {routine.type}
-                        </div>
+                        {routine.type === 'TEXT' && routine.config?.text ? (
+                          <div className="w-full h-full bg-black flex flex-col items-start justify-center overflow-hidden">
+                            <div className="w-full h-full">
+                              <div className="text-white font-mono font-bold w-full h-full grid">
+                                {(() => {
+                                  // Get the text content
+                                  const text = String(routine.config.text || "");
+                                  
+                                  // Process text to match display format
+                                  const processedText = text.replace(/\n/g, ' ');
+                                  
+                                  // Apply left-padding: if the text is shorter than the width,
+                                  // add spaces to the left to make it align to the right
+                                  let paddedText = processedText;
+                                  if (processedText.length <= routine.size.width) {
+                                    // Calculate padding needed (spaces on left)
+                                    const paddingSize = routine.size.width - processedText.length;
+                                    paddedText = ' '.repeat(paddingSize) + processedText;
+                                  }
+                                  
+                                  // Create a grid of characters for exact positioning
+                                  const cells = [];
+                                  
+                                  // Fill the grid with characters
+                                  for (let y = 0; y < routine.size.height; y++) {
+                                    for (let x = 0; x < routine.size.width; x++) {
+                                      const charIndex = y * routine.size.width + x;
+                                      const char = charIndex < paddedText.length ? paddedText[charIndex] : ' ';
+                                      
+                                      cells.push(
+                                        <div 
+                                          key={`cell-${y}-${x}`}
+                                          className="flex items-center justify-center"
+                                          style={{
+                                            width: `${cellSize}px`,
+                                            height: `${cellSize}px`,
+                                            fontSize: `${Math.min(cellSize / 2, 24)}px`,
+                                            gridRow: y + 1,
+                                            gridColumn: x + 1,
+                                          }}
+                                        >
+                                          {char}
+                                        </div>
+                                      );
+                                    }
+                                  }
+                                  
+                                  return cells;
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs font-medium text-white truncate px-2">
+                            {routine.type}
+                          </div>
+                        )}
                         
                         {/* Size constraint indicators */}
                         {selectedRoutineId === routine.id && (

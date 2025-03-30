@@ -2,9 +2,7 @@ package provider
 
 import (
 	"errors"
-	"fmt"
 	"github.com/briandowns/openweathermap"
-	"github.com/google/uuid"
 	"log/slog"
 	"os"
 	"sync"
@@ -27,32 +25,9 @@ type WeatherProvider struct {
 	Units        string      `json:"units"`
 	Type         WeatherType `json:"type"`
 
-	lastValue   float64
-	kill        chan struct{}
-	subscribers map[string]chan any
-	subLock     sync.RWMutex
-}
-
-func (wp *WeatherProvider) AddSubscriber(s chan any) string {
-	id := uuid.NewString()
-
-	wp.subLock.Lock()
-	wp.subscribers[id] = s
-
-	s <- wp.lastValue
-
-	wp.subLock.Unlock()
-
-	return id
-}
-
-func (wp *WeatherProvider) RemoveSubscriber(id string) {
-	wp.subLock.Lock()
-	if v, ok := wp.subscribers[id]; ok {
-		close(v)
-	}
-	delete(wp.subscribers, id)
-	wp.subLock.Unlock()
+	lastValue float64
+	kill      chan struct{}
+	lock      sync.RWMutex
 }
 
 func (wp *WeatherProvider) Start() error {
@@ -78,9 +53,6 @@ func (wp *WeatherProvider) Start() error {
 			select {
 			case <-wp.kill:
 				slog.Info("weather provider received kill signal, exiting")
-				wp.subLock.RLock()
-				wp.closeSubChans()
-				wp.subLock.RUnlock()
 				return
 			default:
 				now := time.Now()
@@ -92,14 +64,11 @@ func (wp *WeatherProvider) Start() error {
 					} else {
 						err = forecast.DailyByID(wp.LocationID, 1)
 						if val, ok := forecast.ForecastWeatherJson.(*openweathermap.Forecast5WeatherData); ok {
-							fmt.Println(val)
-							fmt.Println(val.City)
-							fmt.Println(val.Cnt)
 							if val.Cnt > 0 && len(val.List) > 0 {
 								if wp.Type == HIGH {
 									value = val.List[0].Main.TempMax
 								} else if wp.Type == LOW {
-									value = val.List[0].Main.TempMax
+									value = val.List[0].Main.TempMin
 								}
 							}
 						}
@@ -108,12 +77,9 @@ func (wp *WeatherProvider) Start() error {
 						slog.Error(err.Error())
 					} else {
 						slog.Info("Weather provider reported temp", "Type", wp.Type, "value", value)
-						wp.subLock.Lock()
-						for _, v := range wp.subscribers {
-							v <- value
-						}
+						wp.lock.Lock()
 						wp.lastValue = value
-						wp.subLock.Unlock()
+						wp.lock.Unlock()
 					}
 					refreshTime = now.Add(time.Second * time.Duration(wp.PollRateSecs))
 				}
@@ -126,10 +92,4 @@ func (wp *WeatherProvider) Start() error {
 
 func (wp *WeatherProvider) Stop() {
 	wp.kill <- struct{}{}
-}
-
-func (wp *WeatherProvider) closeSubChans() {
-	for _, v := range wp.subscribers {
-		close(v)
-	}
 }

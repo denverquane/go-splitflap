@@ -83,11 +83,10 @@ func (w *WeatherRoutine) Update(now time.Time) *Message {
 		} else {
 			switch w.WeatherType {
 			case CURRENT:
-				temp = owm.Main.Temp
+				// TODO move to weather provider?
 			case HIGH:
-				temp = owm.Main.TempMax
 			case LOW:
-				temp = owm.Main.TempMin
+				temp = owm.Main.Temp
 			}
 		}
 	}

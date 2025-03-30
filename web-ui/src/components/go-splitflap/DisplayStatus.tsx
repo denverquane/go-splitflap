@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDisplayWebSocket } from './hooks';
 import { useDisplaySize } from './hooks/use-dashboards';
 import { useDisplayAlphabet, useUpdateDisplay } from './hooks/use-display-alphabet';
+import { useDisplayTranslations } from './hooks/use-display-translations';
 import { Badge } from '@/components/shadcn/ui/badge';
 import { Button } from '@/components/shadcn/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/shadcn/ui/card';
@@ -22,6 +23,12 @@ const DisplayStatus: React.FC = () => {
   const { size } = useDisplaySize();
   const { validChars, isLoading: isLoadingChars } = useDisplayAlphabet();
   const { updateDisplay, clearDisplay } = useUpdateDisplay();
+  const { 
+    translateChar, 
+    hasTranslation, 
+    reverseTranslateChar,
+    hasReverseTranslation
+  } = useDisplayTranslations();
   const [isClearing, setIsClearing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [editableText, setEditableText] = useState<string[]>([]);
@@ -47,7 +54,11 @@ const DisplayStatus: React.FC = () => {
       if (isInitialLoad) {
         const chars = [];
         for (let i = 0; i < size.width * size.height; i++) {
-          chars.push(i < displayText.length ? displayText[i] : ' ');
+          // Apply reverse translations - convert 'd' back to '°', etc.
+          const originalChar = i < displayText.length ? displayText[i] : ' ';
+          const displayChar = hasReverseTranslation(originalChar) ? 
+            reverseTranslateChar(originalChar) : originalChar;
+          chars.push(displayChar);
         }
         setEditableText(chars);
         setIsInitialLoad(false);
@@ -57,13 +68,18 @@ const DisplayStatus: React.FC = () => {
           const updatedText = [...prev];
           for (let i = 0; i < size.width * size.height; i++) {
             if (!editedIndices.has(i)) {
-              updatedText[i] = i < displayText.length ? displayText[i] : ' ';
+              const originalChar = i < displayText.length ? displayText[i] : ' ';
+              const displayChar = hasReverseTranslation(originalChar) ? 
+                reverseTranslateChar(originalChar) : originalChar;
+              updatedText[i] = displayChar;
             }
           }
           return updatedText;
         });
       }
     }
+  // Remove the hook functions from the dependency array to avoid infinite loops
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayState, size, editedIndices, isInitialLoad]);
   
   // Function to discard all user changes
@@ -72,7 +88,10 @@ const DisplayStatus: React.FC = () => {
       const displayText = displayState.displayState || displayState.state || '';
       const chars = [];
       for (let i = 0; i < size.width * size.height; i++) {
-        chars.push(i < displayText.length ? displayText[i] : ' ');
+        const originalChar = i < displayText.length ? displayText[i] : ' ';
+        const displayChar = hasReverseTranslation(originalChar) ? 
+          reverseTranslateChar(originalChar) : originalChar;
+        chars.push(displayChar);
       }
       setEditableText(chars);
       setEditedIndices(new Set());
@@ -112,14 +131,18 @@ const DisplayStatus: React.FC = () => {
   const handleUpdateDisplay = async () => {
     try {
       setIsSending(true);
+      
+      // Convert any display characters ('°') back to their expected backend format ('d')
+      const translatedChars = editableText.map(char => hasTranslation(char) ? translateChar(char) : char);
+      
       // Join the array of characters into a string
-      const newDisplayText = editableText.join('').replace(/\u00A0/g, ' ');
+      const newDisplayText = translatedChars.join('').replace(/\u00A0/g, ' ');
       
       await updateDisplay(newDisplayText);
       
       // Update was successful, so clear the edited indices
       setEditedIndices(new Set());
-      // Update the original text to match the current edited text
+      // Update the original text to match the current edited text (but use the backend version)
       setOriginalText(newDisplayText);
       
       toast({
@@ -142,9 +165,12 @@ const DisplayStatus: React.FC = () => {
   // Handle character change for a specific cell
   const handleCellChange = (index: number, newChar: string) => {
     // Validate the character against the set of valid characters
-    // Allow empty input (will be converted to space) or valid characters
-    const validatedChar = newChar === '' ? ' ' : 
-                          validChars.has(newChar) ? newChar : null;
+    // Allow empty input (will be converted to space), valid characters, or characters that translate to valid ones
+    const isValidChar = newChar === '' || // Empty is allowed
+                       validChars.has(newChar) || // Direct valid char
+                       (hasTranslation(newChar) && validChars.has(translateChar(newChar))); // Char translates to valid
+    
+    const validatedChar = newChar === '' ? ' ' : isValidChar ? newChar : null;
     
     // If the character is invalid, don't update the cell
     if (validatedChar === null) return;
@@ -266,11 +292,22 @@ const DisplayStatus: React.FC = () => {
     
     const { width, height } = size;
     
-    // Check if the character is different from the original 
+    // Check if the character is different from the original, accounting for translations
     const isCharChanged = (index: number) => {
       const originalChar = index < originalText.length ? originalText[index] : ' ';
       const currentChar = editableText[index] || ' ';
-      return originalChar !== currentChar;
+      
+      // If the characters are the same, there's no change
+      if (originalChar === currentChar) return false;
+      
+      // If current character translates to the original, it's not considered changed
+      if (hasTranslation(currentChar) && translateChar(currentChar) === originalChar) return false;
+      
+      // If original character would reverse-translate to current, it's not considered changed
+      if (hasReverseTranslation(originalChar) && reverseTranslateChar(originalChar) === currentChar) return false;
+      
+      // Otherwise, it's changed
+      return true;
     };
     
     return (
@@ -286,12 +323,14 @@ const DisplayStatus: React.FC = () => {
         >
           {editableText.map((char, index) => {
             const isChanged = isCharChanged(index);
+            const willTranslate = hasTranslation(char);
+            const translatedChar = translateChar(char);
             
             return (
               <div 
                 key={index}
                 className={`
-                  flex items-center justify-center overflow-hidden
+                  flex items-center justify-center overflow-hidden relative
                   ${activeCell === index ? 'border-accent-foreground border-2 bg-accent/30' : 
                     isChanged ? 'border-primary border-2' : 'border-border border'}
                   cursor-text
@@ -319,7 +358,7 @@ const DisplayStatus: React.FC = () => {
                     display-cell-input
                     w-full h-full text-center text-4xl font-mono bg-transparent
                     focus:outline-none
-                    ${isChanged ? 'text-primary' : 'text-foreground'}
+                    ${isChanged ? 'text-primary' : willTranslate ? 'text-accent-foreground' : 'text-foreground'}
                     ${activeCell === index ? 'bg-accent/30' : ''}
                     ${isLoadingChars || displayState?.activeDashboard || displayState?.activeRotation ? 'cursor-not-allowed opacity-50' : 'cursor-text'}
                   `}
@@ -330,15 +369,23 @@ const DisplayStatus: React.FC = () => {
                   title={isLoadingChars ? "Loading valid characters..." : 
                          displayState?.activeDashboard || displayState?.activeRotation ? 
                          "Editing disabled while a dashboard or rotation is active" : 
+                         willTranslate ? `Will display as: ${translatedChar}` : 
                          "Enter a valid display character"}
                 />
+                
+                {/* Show translation indicator */}
+                {willTranslate && (
+                  <div className="absolute top-0 right-0 bg-accent text-accent-foreground text-[8px] px-1 rounded-bl-sm">
+                    {translatedChar}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
         
-        {/* Add update and discard buttons if there are changes */}
-        {editableText.some((char, index) => isCharChanged(index)) && (
+        {/* Add update and discard buttons if there are meaningful changes (excluding just translations) */}
+        {editableText.some((_, index) => isCharChanged(index)) && (
           <div className="mt-2 flex justify-between">
             <Button 
               variant="outline" 
@@ -470,36 +517,60 @@ const DisplayStatus: React.FC = () => {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-80 p-4">
-                        <div className="space-y-2">
-                          <h4 className="font-medium text-sm flex items-center gap-1">
-                            <Info className="h-4 w-4" />
-                            Valid Display Characters
-                          </h4>
-                          <div className="text-xs text-muted-foreground">
-                            Only these characters can be displayed on the physical splitflap display.
-                            Click any character to use it.
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="font-medium text-sm flex items-center gap-1">
+                              <Info className="h-4 w-4" />
+                              Valid Display Characters
+                            </h4>
+                            <div className="text-xs text-muted-foreground">
+                              Only these characters can be displayed on the physical splitflap display.
+                              Click any character to use it.
+                            </div>
+                            
+                            {/* All valid characters */}
+                            <div className="mt-3">
+                              <div className="flex flex-wrap gap-1">
+                                {Array.from(validChars).sort().map((char, i) => (
+                                  <Button
+                                    key={i}
+                                    variant="outline"
+                                    size="icon"
+                                    className={`h-8 w-8 text-base font-mono ${hasTranslation(char) ? 'border-accent text-accent-foreground' : ''}`}
+                                    onClick={() => {
+                                      // If a cell is active, update it with this character
+                                      if (activeCell !== null) {
+                                        handleCellChange(activeCell, char);
+                                      }
+                                    }}
+                                    title={char === ' ' ? 'Space' : hasTranslation(char) ? 
+                                      `Character: ${char} (translates to ${translateChar(char)})` : 
+                                      `Character: ${char}`}
+                                  >
+                                    {char === ' ' ? '␣' : char}
+                                    {hasTranslation(char) && (
+                                      <span className="absolute top-0 right-0 text-[8px] bg-accent text-accent-foreground px-1 rounded-bl-sm">
+                                        {translateChar(char)}
+                                      </span>
+                                    )}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                           
-                          {/* All valid characters */}
-                          <div className="mt-3">
-                            <div className="flex flex-wrap gap-1">
-                              {Array.from(validChars).sort().map((char, i) => (
-                                <Button
-                                  key={i}
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 text-base font-mono"
-                                  onClick={() => {
-                                    // If a cell is active, update it with this character
-                                    if (activeCell !== null) {
-                                      handleCellChange(activeCell, char);
-                                    }
-                                  }}
-                                  title={char === ' ' ? 'Space' : `Character: ${char}`}
-                                >
-                                  {char === ' ' ? '␣' : char}
-                                </Button>
-                              ))}
+                          <div>
+                            <h4 className="font-medium text-sm flex items-center gap-1">
+                              <Info className="h-4 w-4" />
+                              Character Translations
+                            </h4>
+                            <div className="text-xs text-muted-foreground">
+                              These characters will be automatically translated when displayed on the physical device.
+                            </div>
+                            <div className="mt-2 text-xs flex flex-wrap gap-1">
+                              <a href="/settings" className="text-accent-foreground underline">
+                                Manage translations in settings
+                              </a>
                             </div>
                           </div>
                         </div>

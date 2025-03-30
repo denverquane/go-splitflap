@@ -22,6 +22,7 @@ func SetupDisplayHandlers(r chi.Router, display *splitflap.Display) {
 	r.Post("/update", updateDisplay(display))
 	r.Get("/alphabet", getAlphabet())
 	r.Get("/translations", getTranslations(display))
+	r.Post("/translations", updateTranslations(display))
 }
 
 // getDisplaySize returns the current display dimensions
@@ -53,7 +54,13 @@ func clearDisplay(display *splitflap.Display) http.HandlerFunc {
 // getTranslations returns the current display character translations
 func getTranslations(display *splitflap.Display) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bytes, err := json.Marshal(display.Translations)
+		// Convert rune map to string map for more consistent JSON serialization
+		stringMap := make(map[string]string)
+		for src, dst := range display.Translations {
+			stringMap[string(src)] = string(dst)
+		}
+		
+		bytes, err := json.Marshal(stringMap)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -100,6 +107,60 @@ func updateDisplay(display *splitflap.Display) http.HandlerFunc {
 
 		// Update the display with the new text
 		display.Set(req.Text)
+
+		// Broadcast the state change to all WebSocket clients
+		BroadcastStateChange()
+
+		respondJSON(w, []byte(`{"status":"ok"}`))
+	}
+}
+
+// UpdateTranslationsRequest represents the request body for updating character translations
+type UpdateTranslationsRequest map[string]string
+
+// updateTranslations handles updating the character translation map
+func updateTranslations(display *splitflap.Display) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Read and parse the request body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			slog.Error("Failed to read request body", "error", err)
+			http.Error(w, "Failed to read request body", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+
+		var req UpdateTranslationsRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			slog.Error("Failed to parse request body", "error", err)
+			http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string map to rune map
+		translations := make(map[rune]rune)
+		for src, dst := range req {
+			// Convert strings to runes to properly handle Unicode characters
+			srcRunes := []rune(src)
+			dstRunes := []rune(dst)
+			
+			if len(srcRunes) != 1 || len(dstRunes) != 1 {
+				http.Error(w, "Source and destination must be single Unicode characters", http.StatusBadRequest)
+				return
+			}
+			translations[srcRunes[0]] = dstRunes[0]
+		}
+
+		// Update display translations
+		display.Translations = translations
+
+		// Save the updated display configuration
+		err = splitflap.WriteDisplayToFile(display, display.GetFilepath())
+		if err != nil {
+			slog.Error("Failed to save display configuration", "error", err)
+			http.Error(w, "Failed to save display configuration", http.StatusInternalServerError)
+			return
+		}
 
 		// Broadcast the state change to all WebSocket clients
 		BroadcastStateChange()

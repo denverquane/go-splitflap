@@ -10,7 +10,6 @@ import (
 func TestDashboard_UnmarshalJSON(t *testing.T) {
 	d := Dashboard{Routines: []*routine.Routine{{
 		RoutineBase: routine.RoutineBase{
-			Name: "clock",
 			Type: routine.CLOCK,
 			Location: display.Location{
 				X: 1,

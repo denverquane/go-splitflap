@@ -8,7 +8,8 @@ export type Path =
     | `/dashboards/:name`
     | `/dashboards/new`
     | `/rotations`
-    | `/routines`;
+    | `/routines`
+    | `/settings`;
 
 export type Params = {
     "/dashboards/:name": { name: string };
