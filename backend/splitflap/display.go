@@ -29,6 +29,7 @@ type Display struct {
 	dashboardRotationMessages chan string
 	filepath                  string
 	inMessages                chan routine.Message
+	lockoutUntil              time.Time
 }
 
 func NewDisplay(size display.Size) *Display {
@@ -112,13 +113,14 @@ func (d *Display) SetStateSubscriber(s chan struct{}) {
 }
 
 func (d *Display) Clear() {
-	d.Set(strings.Repeat(" ", d.Size.Height*d.Size.Width))
+	d.Set(strings.Repeat(" ", d.Size.Height*d.Size.Width), 0)
 }
 
-func (d *Display) Set(str string) {
+func (d *Display) Set(str string, duration time.Duration) {
 	go func() {
 		d.inMessages <- routine.Message{
-			Text: str,
+			Text:     str,
+			Duration: duration,
 		}
 	}()
 }
@@ -278,6 +280,10 @@ func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
 			}
 
 		case msg := <-d.inMessages:
+			// if a message provides a minimum duration, then make sure no other routines interrupt it
+			if msg.Duration > 0 {
+				d.lockoutUntil = time.Now().Add(msg.Duration)
+			}
 			messages <- OutMessage{payload: arrangeToLayout(msg.Text, d.Layout)}
 
 		case s := <-state:
@@ -293,6 +299,9 @@ func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
 			}
 		case now := <-ticker.C:
 			if d.activeDashboard == "" {
+				break
+			}
+			if now.Before(d.lockoutUntil) {
 				break
 			}
 

@@ -26,6 +26,8 @@ const WebSocketContext = createContext<WebSocketContextType>({
   requestState: () => {}
 });
 
+const WS_URL = import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:3000/ws"
+
 /**
  * Global WebSocket state to be shared across the application
  */
@@ -46,7 +48,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       }
 
       // For development with a proxied backend, adjust URL if needed
-      const wsUrl = 'ws://10.0.0.166:3000/ws';
+      const wsUrl = WS_URL;
       
       console.log('Creating new WebSocket connection...');
       const socket = new WebSocket(wsUrl);

@@ -28,7 +28,7 @@ func (c *Client) Connect(port string, notify func(state *gen.SplitflapState)) er
 	if connection == nil {
 		return errors.New("couldn't connect over USB")
 	}
-	sf := usb_serial.NewSplitflap(connection, notify)
+	sf := usb_serial.NewSplitflap(connection, notify, 0)
 	sf.Start()
 
 	c.serial = sf
