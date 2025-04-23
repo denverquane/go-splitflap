@@ -41,7 +41,7 @@ type Splitflap struct {
 	handleReadState func(state *gen.SplitflapState)
 }
 
-func NewSplitflap(serialInstance SerialConnection, handleState func(state *gen.SplitflapState)) *Splitflap {
+func NewSplitflap(serialInstance SerialConnection, handleState func(state *gen.SplitflapState), modules int) *Splitflap {
 	s := &Splitflap{
 		serial:          serialInstance,
 		outQueue:        make(chan EnqueuedMessage, 100),
@@ -51,8 +51,9 @@ func NewSplitflap(serialInstance SerialConnection, handleState func(state *gen.S
 		currentConfig:   nil,
 		handleReadState: handleState,
 	}
-
-	//s.initializeModuleList(12)
+	if modules > 0 {
+		s.initializeModuleList(modules)
+	}
 
 	return s
 }

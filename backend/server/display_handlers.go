@@ -8,11 +8,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 // UpdateDisplayRequest represents the request body for updating display text
 type UpdateDisplayRequest struct {
-	Text string `json:"text"`
+	Text         string `json:"text"`
+	DurationSecs int64  `json:"duration_secs"`
 }
 
 // SetupDisplayHandlers registers all display-related routes
@@ -59,7 +61,7 @@ func getTranslations(display *splitflap.Display) http.HandlerFunc {
 		for src, dst := range display.Translations {
 			stringMap[string(src)] = string(dst)
 		}
-		
+
 		bytes, err := json.Marshal(stringMap)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -105,8 +107,10 @@ func updateDisplay(display *splitflap.Display) http.HandlerFunc {
 			return
 		}
 
+		dur := time.Duration(req.DurationSecs) * time.Second
+
 		// Update the display with the new text
-		display.Set(req.Text)
+		display.Set(req.Text, dur)
 
 		// Broadcast the state change to all WebSocket clients
 		BroadcastStateChange()
@@ -143,7 +147,7 @@ func updateTranslations(display *splitflap.Display) http.HandlerFunc {
 			// Convert strings to runes to properly handle Unicode characters
 			srcRunes := []rune(src)
 			dstRunes := []rune(dst)
-			
+
 			if len(srcRunes) != 1 || len(dstRunes) != 1 {
 				http.Error(w, "Source and destination must be single Unicode characters", http.StatusBadRequest)
 				return

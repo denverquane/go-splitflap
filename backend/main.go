@@ -15,8 +15,8 @@ const DisplayFile = "display.json"
 
 func main() {
 	// Command line flags
-	useMock := flag.Bool("mock", false, "Use mock serial connection instead of real hardware")
-	port := flag.String("port", "COM5", "Serial port to connect to when not using mock")
+	useMock := flag.Bool("mock", true, "Use mock serial connection instead of real hardware")
+	port := flag.String("port", "", "Serial port to connect to when not using mock")
 	flag.Parse()
 
 	state := make(chan string)
@@ -29,34 +29,6 @@ func main() {
 			comb += string(usb_serial.GlobalAlphabet[v.FlapIndex])
 		}
 		state <- comb
-	}
-
-	messages := make(chan splitflap.OutMessage)
-
-	var splitflapClient *splitflap.Client
-
-	// Initialize hardware connection if requested
-	if *useMock || *port != "" {
-		splitflapClient = new(splitflap.Client)
-		*splitflapClient = splitflap.NewSplitflapClient()
-
-		var err error
-		if *useMock {
-			slog.Info("Using mock serial connection")
-			err = connectMockSerial(splitflapClient, handleState)
-		} else {
-			slog.Info("Connecting to hardware on port", "port", *port)
-			err = splitflapClient.Connect(*port, handleState)
-		}
-
-		if err != nil {
-			slog.Error("Failed to connect to splitflap", "error", err.Error())
-			os.Exit(1)
-		} else {
-			go splitflapClient.Run(messages)
-		}
-	} else {
-		slog.Info("No hardware connection requested, running in software-only mode")
 	}
 
 	hub, err := splitflap.LoadDisplayFromFile(DisplayFile)
@@ -79,6 +51,35 @@ func main() {
 		}
 	}
 
+	messages := make(chan splitflap.OutMessage)
+
+	var splitflapClient *splitflap.Client
+
+	// Initialize hardware connection if requested
+	if *useMock || *port != "" {
+		splitflapClient = new(splitflap.Client)
+		*splitflapClient = splitflap.NewSplitflapClient()
+
+		var err error
+		if *useMock {
+			modules := hub.Size.Height * hub.Size.Width
+			slog.Info("Using mock serial connection", "modules", modules)
+			err = connectMockSerial(splitflapClient, handleState, modules)
+		} else {
+			slog.Info("Connecting to hardware on port", "port", *port)
+			err = splitflapClient.Connect(*port, handleState)
+		}
+
+		if err != nil {
+			slog.Error("Failed to connect to splitflap", "error", err.Error())
+			os.Exit(1)
+		} else {
+			go splitflapClient.Run(messages)
+		}
+	} else {
+		slog.Info("No hardware connection requested, running in software-only mode")
+	}
+
 	//err = hub.Providers.Start()
 	//if err != nil {
 	//	slog.Error(err.Error())
@@ -94,9 +95,9 @@ func main() {
 }
 
 // Connect to a mock serial device
-func connectMockSerial(client *splitflap.Client, notify func(state *gen.SplitflapState)) error {
-	mockConn := usb_serial.NewMockConnection()
-	sf := usb_serial.NewSplitflap(mockConn, notify)
+func connectMockSerial(client *splitflap.Client, notify func(state *gen.SplitflapState), modules int) error {
+	mockConn := usb_serial.NewMockConnection(modules)
+	sf := usb_serial.NewSplitflap(mockConn, notify, modules)
 	sf.Start()
 
 	client.SetSerial(sf)
