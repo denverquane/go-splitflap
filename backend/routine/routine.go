@@ -3,6 +3,7 @@ package routine
 import (
 	"encoding/json"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"time"
 )
 
@@ -15,11 +16,11 @@ type RoutineType string
 
 // RoutineIface is the "contract" that any custom functionality should conform to
 type RoutineIface interface {
-	SizeRange() (display.Min, display.Max) // what range of sizes the routine is capable of supporting
-	Check() error                          // verify that the config is valid, all required fields are set, API keys work, etc
-	Init(size display.Size) error          // perform any initialization behavior that is required for further operation in subsequent Update calls
-	Update(now time.Time) *Message         // return nil if no update is required, but non-nil messages indicate a change to what the routine displays
-	Parameters() []Parameter               // return all fields that are expected to be provided (via JSON) for proper configuration
+	SizeRange() (display.Min, display.Max)                         // what range of sizes the routine is capable of supporting
+	Check() error                                                  // verify that the config is valid, all required fields are set, API keys work, etc
+	Init(size display.Size) error                                  // perform any initialization behavior that is required for further operation in subsequent Update calls
+	Update(now time.Time, values provider.ProviderValues) *Message // return nil if no update is required, but non-nil messages indicate a change to what the routine displays
+	Parameters() []Parameter                                       // return all fields that are expected to be provided (via JSON) for proper configuration
 }
 
 // Parameter represents configurable fields in a given Routine. If you write your own Routines, be meticulous

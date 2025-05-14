@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"time"
 )
 
@@ -41,7 +42,7 @@ func (d *DaysUntilRoutine) Init(size display.Size) error {
 	return nil
 }
 
-func (d *DaysUntilRoutine) Update(now time.Time) *Message {
+func (d *DaysUntilRoutine) Update(now time.Time, _ provider.ProviderValues) *Message {
 	if now.Sub(d.lastUpdate) < time.Minute {
 		return nil
 	}

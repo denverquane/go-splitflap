@@ -26,7 +26,6 @@ type WebSocketManager struct {
 // DisplayState represents the current state of the display
 type DisplayState struct {
 	ActiveDashboard string    `json:"activeDashboard"`
-	ActiveRotation  string    `json:"activeRotation"`
 	State           string    `json:"state"`
 	CurrentTime     time.Time `json:"currentTime"`
 }
@@ -155,7 +154,6 @@ func (wsm *WebSocketManager) BroadcastState() {
 func (wsm *WebSocketManager) getCurrentState() DisplayState {
 	return DisplayState{
 		ActiveDashboard: wsm.display.ActiveDashboard(),
-		ActiveRotation:  wsm.display.ActiveRotation(),
 		State:           wsm.display.GetState(),
 		CurrentTime:     time.Now(),
 	}

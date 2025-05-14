@@ -7,7 +7,6 @@ export type Path =
     | `/dashboards`
     | `/dashboards/:name`
     | `/dashboards/new`
-    | `/rotations`
     | `/routines`
     | `/settings`;
 

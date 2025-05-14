@@ -80,12 +80,14 @@ func main() {
 		slog.Info("No hardware connection requested, running in software-only mode")
 	}
 
-	//err = hub.Providers.Start()
-	//if err != nil {
-	//	slog.Error(err.Error())
-	//	return
-	//}
-
+	for name, prov := range hub.Providers {
+		err = prov.Provider.Start()
+		if err != nil {
+			slog.Error("failed to start provider with error", "error", err.Error(), "provider", name)
+			return
+		}
+	}
+	
 	go hub.Run(messages, state)
 
 	err = server.Run("3000", hub)

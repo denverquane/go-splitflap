@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"github.com/denverquane/go-splitflap/routine"
 	"io"
 	"log/slog"
@@ -13,23 +14,20 @@ import (
 )
 
 type Display struct {
-	Size         display.Size  `json:"size"`
-	Translations map[rune]rune `json:"translations"`
-	//Providers         provider.Providers            `json:"providers"`
-	Dashboards        map[string]*Dashboard         `json:"dashboards"`
-	DashboardRotation map[string]*DashboardRotation `json:"dashboard_rotation"`
-	Layout            []int                         `json:"layout"`
-	PollRate          int64                         `json:"poll_rate_ms"`
+	Size         display.Size                 `json:"size"`
+	Translations map[rune]rune                `json:"translations"`
+	Providers    map[string]provider.Provider `json:"providers"`
+	Dashboards   map[string]*Dashboard        `json:"dashboards"`
+	Layout       []int                        `json:"layout"`
+	PollRate     int64                        `json:"poll_rate_ms"`
 
 	activeDashboard string
-	activeRotation  string
 
-	state                     string
-	stateSubscriber           chan<- struct{}
-	dashboardRotationMessages chan string
-	filepath                  string
-	inMessages                chan routine.Message
-	lockoutUntil              time.Time
+	state           string
+	stateSubscriber chan<- struct{}
+	filepath        string
+	inMessages      chan routine.Message
+	lockoutUntil    time.Time
 }
 
 func NewDisplay(size display.Size) *Display {
@@ -40,14 +38,11 @@ func NewDisplay(size display.Size) *Display {
 	return &Display{
 		Size:         size,
 		Translations: make(map[rune]rune),
-		//Providers:                 provider.Providers{},
-		Dashboards:                make(map[string]*Dashboard),
-		DashboardRotation:         make(map[string]*DashboardRotation),
-		dashboardRotationMessages: make(chan string),
-		Layout:                    layout,
+		Providers:    make(map[string]provider.Provider),
+		Dashboards:   make(map[string]*Dashboard),
+		Layout:       layout,
 
 		activeDashboard: "",
-		activeRotation:  "",
 		state:           "",
 		stateSubscriber: nil,
 		filepath:        "",
@@ -81,9 +76,7 @@ func LoadDisplayFromFile(path string) (*Display, error) {
 	}
 	d.filepath = path
 	d.activeDashboard = ""
-	d.activeRotation = ""
 	d.inMessages = make(chan routine.Message)
-	d.dashboardRotationMessages = make(chan string)
 	return &d, nil
 }
 
@@ -94,10 +87,6 @@ func WriteDisplayToFile(display *Display, path string) error {
 
 func (d *Display) ActiveDashboard() string {
 	return d.activeDashboard
-}
-
-func (d *Display) ActiveRotation() string {
-	return d.activeRotation
 }
 
 func (d *Display) GetState() string {
@@ -117,12 +106,10 @@ func (d *Display) Clear() {
 }
 
 func (d *Display) Set(str string, duration time.Duration) {
-	go func() {
-		d.inMessages <- routine.Message{
-			Text:     str,
-			Duration: duration,
-		}
-	}()
+	d.inMessages <- routine.Message{
+		Text:     str,
+		Duration: duration,
+	}
 }
 
 func (d *Display) write() error {
@@ -161,19 +148,11 @@ func (d *Display) DeleteDashboard(name string) error {
 		return errors.New("dashboard with that name doesn't exist")
 	}
 
-	// Check if this dashboard is part of any rotation
-	for rotName, rotation := range d.DashboardRotation {
-		for _, dashRot := range rotation.Rotation {
-			if dashRot.Name == name {
-				return errors.New("dashboard is part of rotation: " + rotName)
-			}
-		}
-	}
-
 	delete(d.Dashboards, name)
 	return d.write()
 }
 
+// TODO prevent overlapping routines?
 func (d *Display) AddRoutineToDashboard(dashboardName string, rout routine.Routine) error {
 	loc := rout.Location
 	size := rout.Size
@@ -215,70 +194,23 @@ func (d *Display) ActivateDashboard(name string) error {
 	return nil
 }
 
-func (d *Display) AddDashboardRotation(rotationName string, rot DashboardRotation) error {
-	if _, ok := d.DashboardRotation[rotationName]; ok {
-		return errors.New("dashboard rotation already exists with that name")
-	} else if len(rot.Rotation) < 2 {
-		return errors.New("2 or more dashboards are required to form a rotation")
-	} else {
-		for _, r := range rot.Rotation {
-			if _, okok := d.Dashboards[r.Name]; !okok {
-				return errors.New("dashboard in rotation does not exist")
-			}
-			if r.DurationSecs < 1 {
-				return errors.New("can't have a dashboard in a rotation with less than 1 sec duration")
-			}
-		}
-		d.DashboardRotation[rotationName] = &rot
-	}
-	return d.write()
-}
-
-func (d *Display) ActivateDashboardRotation(name string) error {
-	if rot, ok := d.DashboardRotation[name]; !ok {
-		return errors.New("no dashboard rotation with that name")
-	} else {
-		d.DeactivateActiveDashboard()
-
-		rot.Start(d.dashboardRotationMessages)
-
-		slog.Info("Dashboard Rotation Started", "name", name)
-		d.activeRotation = name
-	}
-	return nil
-}
-
-func (d *Display) DeactivateDashboardRotation() {
-	if d.activeRotation == "" {
-		return
-	}
-	if rot, ok := d.DashboardRotation[d.activeRotation]; !ok {
-		slog.Error("no dashboard rotation with the value stored as the current active")
-	} else {
-		rot.Stop()
-		d.Clear()
-		slog.Info("Dashboard Rotation Stopped", "name", d.activeRotation)
-		d.activeRotation = ""
-	}
-}
-
 func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
 
 	// TODO what if our display is already running when we change the layout?
 	invLayout := invertLayout(d.Layout)
 
+	providerTicker := time.NewTicker(time.Millisecond * time.Duration(d.PollRate))
+
 	ticker := time.NewTicker(time.Millisecond * time.Duration(d.PollRate))
 
+	values := make(provider.ProviderValues)
+
+	// we use a single update loop to prevent races or needing locks, and communication with the splitflap is "serial" anyways
 	for {
 		select {
-		case name := <-d.dashboardRotationMessages:
-			d.DeactivateActiveDashboard()
-			d.Clear()
-			err := d.ActivateDashboard(name)
-			if err != nil {
-				slog.Error(err.Error())
-			}
 
+		// inMessages is the channel for actual final messages to be sent directly to the splitflap.
+		// So these can come from routines further down, but also manually overridden via API endpoints, for example
 		case msg := <-d.inMessages:
 			// if a message provides a minimum duration, then make sure no other routines interrupt it
 			if msg.Duration > 0 {
@@ -286,26 +218,34 @@ func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
 			}
 			messages <- OutMessage{payload: arrangeToLayout(msg.Text, d.Layout)}
 
+			// process state received from the Splitflap
 		case s := <-state:
 			s = arrangeToLayout(s, invLayout)
 			slog.Info("Received state from display", "state", s)
-			//if d.activeDashboard != "" {
-			//	dash := d.Dashboards[d.activeDashboard]
-			//	dash.SetState(d.Size, s)
-			//}
+
 			d.state = s
 			if d.stateSubscriber != nil {
 				d.stateSubscriber <- struct{}{}
 			}
+
+		case <-providerTicker.C:
+			for name, p := range d.Providers {
+				values[name] = p.Provider.Values()
+			}
+
+			// run the update loop every tick
 		case now := <-ticker.C:
+
+			// TODO is this correct? Should a routine ever be updated if it doesn't belong to a dashboard?
 			if d.activeDashboard == "" {
 				break
 			}
+			// don't update if we have a minimum duration specified for the current state
 			if now.Before(d.lockoutUntil) {
 				break
 			}
 
-			msgs := d.Dashboards[d.activeDashboard].Update(now)
+			msgs := d.Dashboards[d.activeDashboard].Update(now, values)
 			if len(msgs) == 0 {
 				break
 			}

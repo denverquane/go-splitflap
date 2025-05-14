@@ -93,3 +93,13 @@ func (wp *WeatherProvider) Start() error {
 func (wp *WeatherProvider) Stop() {
 	wp.kill <- struct{}{}
 }
+
+func (wp *WeatherProvider) Values() PValues {
+	wp.lock.RLock()
+	defer wp.lock.RUnlock()
+
+	return PValues{
+		"value": wp.lastValue,
+		"units": wp.Units,
+	}
+}

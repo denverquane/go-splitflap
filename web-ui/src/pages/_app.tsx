@@ -8,7 +8,6 @@ import DisplayStatus from "@/components/go-splitflap/DisplayStatus";
 export default function AppLayout() {
     const location = useLocation();
     const showStatus = location.pathname.startsWith('/dashboards') ||
-        location.pathname.startsWith('/rotations') ||
         location.pathname.startsWith('/routines') ||
         location.pathname.startsWith('/settings');
 
@@ -33,7 +32,6 @@ export default function AppLayout() {
                         <div className="flex space-x-6">
                             <Link to="/routines" className="hover:text-primary font-medium">Routines</Link>
                             <Link to="/dashboards" className="hover:text-primary font-medium">Dashboards</Link>
-                            <Link to="/rotations" className="hover:text-primary font-medium">Rotations</Link>
                             <Link to="/settings" className="hover:text-primary font-medium">Settings</Link>
                         </div>
                     </nav>

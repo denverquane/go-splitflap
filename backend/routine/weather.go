@@ -3,31 +3,20 @@ package routine
 import (
 	"errors"
 	"fmt"
-	"github.com/briandowns/openweathermap"
 	"github.com/denverquane/go-splitflap/display"
-	"log"
+	"github.com/denverquane/go-splitflap/provider"
 	"log/slog"
-	"os"
+	"math"
 	"time"
 )
 
 const WEATHER = "WEATHER"
 
-type WeatherType int
-
-const (
-	CURRENT WeatherType = iota
-	HIGH
-	LOW
-)
-
 type WeatherRoutine struct {
-	PollRateSecs int         `json:"poll_rate_secs"`
-	WeatherType  WeatherType `json:"weather_type"`
-	Units        string      `json:"units"`
-	ShowUnits    bool        `json:"show_units"`
-	ShowDegree   bool        `json:"show_degree"`
-	LocationID   int         `json:"location_id"`
+	ProviderName string `json:"provider_name"`
+	ShowUnits    bool   `json:"show_units"`
+	ShowDegree   bool   `json:"show_degree"`
+	RoundDecimal bool   `json:"round_decimal"`
 
 	size       display.Size
 	lastUpdate time.Time
@@ -38,19 +27,7 @@ func (w *WeatherRoutine) SizeRange() (display.Min, display.Max) {
 }
 
 func (w *WeatherRoutine) Check() error {
-	if w.Units != "F" && w.Units != "C" && w.Units != "K" {
-		return errors.New("weather units is not one of C, F, or K")
-	}
-	if w.PollRateSecs < 1 {
-		return errors.New("poll_rate_secs cannot be < 1")
-	}
-	if w.LocationID == 0 {
-		return errors.New("location_id was not provided")
-	}
-	if w.WeatherType != CURRENT && w.WeatherType != HIGH && w.WeatherType != LOW {
-		return errors.New("weather_type was not recognized")
-	}
-	// todo check API key
+	// TODO check if the provider is configured
 	return nil
 }
 
@@ -65,58 +42,31 @@ func (w *WeatherRoutine) Init(size display.Size) error {
 	return nil
 }
 
-func (w *WeatherRoutine) Update(now time.Time) *Message {
-	if int(now.Sub(w.lastUpdate).Seconds()) < w.PollRateSecs {
+func (w *WeatherRoutine) Update(now time.Time, values provider.ProviderValues) *Message {
+	if int(now.Sub(w.lastUpdate).Seconds()) < 1 {
 		return nil
 	}
 
-	var temp float64
-	// TODO ideally we'd have some sort of singleton "provider" of data, and then individual
-	// routines that can reach out for that cached data and format/display it...
-	owm, err := openweathermap.NewCurrent(w.Units, "en", os.Getenv("OWM_API_KEY"))
-	if err != nil {
-		slog.Error(err.Error())
-	} else {
-		err = owm.CurrentByID(w.LocationID)
-		if err != nil {
-			log.Println(err)
-		} else {
-			switch w.WeatherType {
-			case CURRENT:
-				// TODO move to weather provider?
-			case HIGH:
-			case LOW:
-				temp = owm.Main.Temp
-			}
+	if weatherVals, ok := values[w.ProviderName]; ok {
+		units := weatherVals["units"].(string)
+		temp := weatherVals["value"].(float64)
+
+		msg := Message{
+			Text: display.LeftPad(w.formatTemp(temp, units), w.size),
 		}
-	}
 
-	msg := Message{
-		Text: display.LeftPad(w.formatTemp(temp), w.size),
+		w.lastUpdate = now
+		return &msg
 	}
-
-	w.lastUpdate = now
-	return &msg
+	return nil
 }
 
 func (w *WeatherRoutine) Parameters() []Parameter {
 	return []Parameter{
 		{
-			Name:        "Location ID",
-			Description: "OpenWeatherMap location ID",
-			Field:       "location_id",
-			Type:        "int",
-		},
-		{
-			Name:        "Weather Type",
-			Description: "Type of weather data to display (0: Current, 1: High, 2: Low)",
-			Field:       "weather_type",
-			Type:        "int",
-		},
-		{
-			Name:        "Units",
-			Description: "Temperature units (F, C, or K)",
-			Field:       "units",
+			Name:        "Provider Name",
+			Description: "The name of the weather provider to subscribe to",
+			Field:       "provider_name",
 			Type:        "string",
 		},
 		{
@@ -132,21 +82,26 @@ func (w *WeatherRoutine) Parameters() []Parameter {
 			Type:        "bool",
 		},
 		{
-			Name:        "Poll Rate",
-			Description: "How often to update the weather data (in seconds)",
-			Field:       "poll_rate_secs",
-			Type:        "int",
+			Name:        "Round Decimal",
+			Description: "Should decimals be rounded to the closest whole number",
+			Field:       "round_decimal",
+			Type:        "bool",
 		},
 	}
 }
 
-func (w *WeatherRoutine) formatTemp(val float64) string {
+func (w *WeatherRoutine) formatTemp(val float64, units string) string {
 	var str string
-	if w.size.Width < 5 {
-		str = fmt.Sprintf("%.0f", val)
+	if w.RoundDecimal {
+		str = fmt.Sprintf("%d", int64(math.Round(val)))
 	} else {
-		str = fmt.Sprintf("%.1f", val)
+		if w.size.Width < 5 {
+			str = fmt.Sprintf("%.0f", val)
+		} else {
+			str = fmt.Sprintf("%.1f", val)
+		}
 	}
+
 	if w.ShowDegree {
 		if len(str) < w.size.Width {
 			str += "°"
@@ -156,7 +111,7 @@ func (w *WeatherRoutine) formatTemp(val float64) string {
 	}
 	if w.ShowUnits {
 		if len(str) < w.size.Width {
-			str += w.Units
+			str += units
 		} else {
 			slog.Info("not adding units to weather because output is full", "string", str, "config width", w.size.Width)
 		}

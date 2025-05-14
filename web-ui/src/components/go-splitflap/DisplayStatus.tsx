@@ -360,15 +360,15 @@ const DisplayStatus: React.FC = () => {
                     focus:outline-none
                     ${isChanged ? 'text-primary' : willTranslate ? 'text-accent-foreground' : 'text-foreground'}
                     ${activeCell === index ? 'bg-accent/30' : ''}
-                    ${isLoadingChars || displayState?.activeDashboard || displayState?.activeRotation ? 'cursor-not-allowed opacity-50' : 'cursor-text'}
+                    ${isLoadingChars || displayState?.activeDashboard ? 'cursor-not-allowed opacity-50' : 'cursor-text'}
                   `}
                   style={{ caretColor: 'transparent' }}
                   aria-label={`Character at position ${index}`}
                   autoComplete="off"
-                  disabled={isLoadingChars || displayState?.activeDashboard || displayState?.activeRotation}
+                  disabled={isLoadingChars || !!displayState?.activeDashboard}
                   title={isLoadingChars ? "Loading valid characters..." : 
-                         displayState?.activeDashboard || displayState?.activeRotation ? 
-                         "Editing disabled while a dashboard or rotation is active" : 
+                         displayState?.activeDashboard ? 
+                         "Editing disabled while a dashboard is active" : 
                          willTranslate ? `Will display as: ${translatedChar}` : 
                          "Enter a valid display character"}
                 />
@@ -468,16 +468,6 @@ const DisplayStatus: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center">
-                  <RotateCw className="h-4 w-4 mr-2" />
-                  <span className="font-medium mr-2">Active Rotation:</span>
-                  {displayState.activeRotation ? (
-                    <Badge variant="outline">{displayState.activeRotation}</Badge>
-                  ) : (
-                    <Badge variant="secondary">None</Badge>
-                  )}
-                </div>
-
                 <div className="flex items-center text-xs text-muted-foreground">
                   <Signal className="h-3 w-3 mr-1" />
                   Last update: {formatTime(displayState.currentTime)}
@@ -507,9 +497,9 @@ const DisplayStatus: React.FC = () => {
                           variant="ghost" 
                           size="icon" 
                           className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                          disabled={isLoadingChars || displayState?.activeDashboard || displayState?.activeRotation}
-                          title={displayState?.activeDashboard || displayState?.activeRotation ? 
-                                 "Character selection disabled while a dashboard or rotation is active" : 
+                          disabled={isLoadingChars || !!displayState?.activeDashboard}
+                          title={displayState?.activeDashboard ? 
+                                 "Character selection disabled while a dashboard is active" : 
                                  "Show valid characters"}
                         >
                           <Type className="h-4 w-4" />
@@ -585,10 +575,10 @@ const DisplayStatus: React.FC = () => {
                       <Loader2 className="h-3 w-3 animate-spin" />
                       Loading valid characters...
                     </>
-                  ) : displayState?.activeDashboard || displayState?.activeRotation ? (
+                  ) : displayState?.activeDashboard ? (
                     <>
                       <Info className="h-3 w-3" />
-                      Cell editing is disabled while a dashboard or rotation is active. Deactivate them to edit cells.
+                      Cell editing is disabled while a dashboard is active. Deactivate it to edit cells.
                     </>
                   ) : (
                     <>
@@ -628,8 +618,8 @@ const DisplayStatus: React.FC = () => {
             ) : (
               <>
                 <XCircle className="h-4 w-4 mr-2" />
-                {displayState?.activeDashboard || displayState?.activeRotation ? 
-                  "Clear Display and Deactivate Dashboard/Rotation" : 
+                {displayState?.activeDashboard ? 
+                  "Clear Display and Deactivate Dashboard" : 
                   "Clear Display"}
               </>
             )}

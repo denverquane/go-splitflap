@@ -16,8 +16,10 @@ Many thanks to [serdiev](https://github.com/Serdiev/splitflap-backend) for shari
   New York City: 
   1:23 PM   68F
   ```
-
-* **Rotations** are the final (optional) combination of Dashboards into a time-based scheduling of displays. They enable functionality like, for example, displaying the current time for 9 minutes, followed by the weather for 1 minute, and then repeating ad infinitum.
+  
+* **Providers** are the sources for data that are updated in the background, separate from the updating/displaying schedule of the Splitflap itself.
+  - This prevents, for example, a slow API fetch in a Routine from slowing down the core update loop of the Splitflap, maintaining responsiveness. 
+  - It also prevents excessive API requests when accessing APIs that have rate limits.
 
 ## Backend Development/Installation
 
@@ -29,7 +31,7 @@ On Windows, this will be something like `--port=COM5` (for example), whereas on 
 
 ## Frontend Development
 
-Install [nodeJS](https://nodejs.org/en/download) and [yarn](https://classic.yarnpkg.com/lang/en/docs/install/#windows-stable), then `cd web-ui` and run `yarn` followed by `yarn dev`. If you 
+Install [nodeJS](https://nodejs.org/en/download) and [yarn](https://classic.yarnpkg.com/lang/en/docs/install/#windows-stable), then `cd web-ui` and run `yarn` followed by `yarn dev`.
 
 ## Installation
 

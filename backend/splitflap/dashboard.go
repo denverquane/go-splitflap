@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"github.com/denverquane/go-splitflap/routine"
 	"reflect"
 	"time"
@@ -81,10 +82,10 @@ func (d *Dashboard) Init() error {
 	return nil
 }
 
-func (d *Dashboard) Update(now time.Time) []DashboardMessage {
+func (d *Dashboard) Update(now time.Time, values provider.ProviderValues) []DashboardMessage {
 	msgs := make([]DashboardMessage, 0)
 	for _, rout := range d.Routines {
-		msg := rout.Routine.Update(now)
+		msg := rout.Routine.Update(now, values)
 		if msg != nil {
 			dMsg := DashboardMessage{
 				rout.Location,
@@ -97,6 +98,8 @@ func (d *Dashboard) Update(now time.Time) []DashboardMessage {
 	return msgs
 }
 
+// relevantStateSubset extracts a selection of the state to send to a routine.
+// NOTE not currently used; might be used for something that computes the next state based on current state
 func relevantStateSubset(displaySize display.Size, loc display.Location, size display.Size, state string) string {
 	newState := ""
 	if len(state) < size.Width*size.Height {

@@ -3,6 +3,7 @@ package routine
 import (
 	"errors"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"strings"
 	"time"
 )
@@ -53,7 +54,7 @@ func (c *ClockRoutine) Init(size display.Size) error {
 	return nil
 }
 
-func (c *ClockRoutine) Update(now time.Time) *Message {
+func (c *ClockRoutine) Update(now time.Time, _ provider.ProviderValues) *Message {
 	if now.Sub(c.lastUpdate).Seconds() < 1 {
 		return nil
 	}

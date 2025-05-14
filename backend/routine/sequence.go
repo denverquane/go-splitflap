@@ -3,6 +3,7 @@ package routine
 import (
 	"errors"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"time"
 )
 
@@ -54,7 +55,7 @@ func (s *SequenceRoutine) Init(size display.Size) error {
 	return nil
 }
 
-func (s *SequenceRoutine) Update(now time.Time) *Message {
+func (s *SequenceRoutine) Update(now time.Time, _ provider.ProviderValues) *Message {
 	if s.idx >= len(s.Sequences) {
 		return nil
 	}

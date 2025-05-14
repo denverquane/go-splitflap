@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, createContext, useContext } from 'react';
  */
 export interface DisplayState {
   activeDashboard: string;
-  activeRotation: string;
   currentTime: string;
   displayState?: string; // The current display state as a string of characters
   state?: string; // Backend calls it "state" but we use "displayState" for clarity
@@ -145,7 +144,6 @@ export function useActiveState() {
   
   return {
     activeDashboard: displayState?.activeDashboard || "",
-    activeRotation: displayState?.activeRotation || "",
     isConnected
   };
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 	"strings"
 	"time"
 )
@@ -39,7 +40,7 @@ func (t *TimerRoutine) Init(size display.Size) error {
 	return nil
 }
 
-func (t *TimerRoutine) Update(now time.Time) *Message {
+func (t *TimerRoutine) Update(now time.Time, _ provider.ProviderValues) *Message {
 	if now.Sub(t.lastUpdate).Seconds() < 1 {
 		return nil
 	}

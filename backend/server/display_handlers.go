@@ -42,7 +42,6 @@ func getDisplaySize(display *splitflap.Display) http.HandlerFunc {
 // clearDisplay deactivates all active dashboards/rotations and clears the display
 func clearDisplay(display *splitflap.Display) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		display.DeactivateDashboardRotation()
 		display.DeactivateActiveDashboard()
 		display.Clear()
 
