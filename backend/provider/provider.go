@@ -56,5 +56,6 @@ func (p *Provider) UnmarshalJSON(data []byte) error {
 }
 
 var AllProviders = map[ProviderType]iface{
-	WEATHER: &WeatherProvider{},
+	WEATHER_CURRENT:  &WeatherCurrentProvider{},
+	WEATHER_FORECAST: &WeatherForecastProvider{},
 }

@@ -10,28 +10,30 @@ import (
 	"time"
 )
 
-const WEATHER = "WEATHER"
+const TEMPERATURE = "TEMPERATURE"
 
-type WeatherRoutine struct {
-	ProviderName string `json:"provider_name"`
-	ShowUnits    bool   `json:"show_units"`
-	ShowDegree   bool   `json:"show_degree"`
-	RoundDecimal bool   `json:"round_decimal"`
+type TemperatureRoutine struct {
+	ProviderName  string `json:"provider_name"`
+	ProviderValue string `json:"provider_value"`
+	ShowUnits     bool   `json:"show_units"`
+	ShowDegree    bool   `json:"show_degree"`
+	RoundDecimal  bool   `json:"round_decimal"`
 
 	size       display.Size
 	lastUpdate time.Time
 }
 
-func (w *WeatherRoutine) SizeRange() (display.Min, display.Max) {
+func (w *TemperatureRoutine) SizeRange() (display.Min, display.Max) {
 	return display.Min{Width: 3, Height: 1}, display.Max{Width: 12, Height: 1}
 }
 
-func (w *WeatherRoutine) Check() error {
-	// TODO check if the provider is configured
+func (w *TemperatureRoutine) Check() error {
+	// TODO check if the provider is configured, and that the value is provided
+
 	return nil
 }
 
-func (w *WeatherRoutine) Init(size display.Size) error {
+func (w *TemperatureRoutine) Init(size display.Size) error {
 	if !supportsSize(w, size) {
 		return errors.New("routine does not support that size")
 	}
@@ -42,14 +44,14 @@ func (w *WeatherRoutine) Init(size display.Size) error {
 	return nil
 }
 
-func (w *WeatherRoutine) Update(now time.Time, values provider.ProviderValues) *Message {
+func (w *TemperatureRoutine) Update(now time.Time, values provider.ProviderValues) *Message {
 	if int(now.Sub(w.lastUpdate).Seconds()) < 1 {
 		return nil
 	}
 
 	if weatherVals, ok := values[w.ProviderName]; ok {
 		units := weatherVals["units"].(string)
-		temp := weatherVals["value"].(float64)
+		temp := weatherVals[w.ProviderValue].(float64)
 
 		msg := Message{
 			Text: display.LeftPad(w.formatTemp(temp, units), w.size),
@@ -61,12 +63,18 @@ func (w *WeatherRoutine) Update(now time.Time, values provider.ProviderValues) *
 	return nil
 }
 
-func (w *WeatherRoutine) Parameters() []Parameter {
+func (w *TemperatureRoutine) Parameters() []Parameter {
 	return []Parameter{
 		{
 			Name:        "Provider Name",
-			Description: "The name of the weather provider to subscribe to",
+			Description: "The name of the provider to subscribe to",
 			Field:       "provider_name",
+			Type:        "string",
+		},
+		{
+			Name:        "Provider Value",
+			Description: "The name of the value that the provider populates, that this routine should then use",
+			Field:       "provider_value",
 			Type:        "string",
 		},
 		{
@@ -90,7 +98,7 @@ func (w *WeatherRoutine) Parameters() []Parameter {
 	}
 }
 
-func (w *WeatherRoutine) formatTemp(val float64, units string) string {
+func (w *TemperatureRoutine) formatTemp(val float64, units string) string {
 	var str string
 	if w.RoundDecimal {
 		str = fmt.Sprintf("%d", int64(math.Round(val)))

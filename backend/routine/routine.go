@@ -59,10 +59,10 @@ func supportsSize(routine RoutineIface, size display.Size) bool {
 // AllRoutines is a global record of all the routines the display can support. If you add your own routine, you should
 // "register" it by adding it below!
 var AllRoutines = map[RoutineType]RoutineIface{
-	TEXT:      &TextRoutine{},
-	CLOCK:     &ClockRoutine{},
-	TIMER:     &TimerRoutine{},
-	WEATHER:   &WeatherRoutine{},
-	SEQUENCE:  &SequenceRoutine{},
-	DAYSUNTIL: &DaysUntilRoutine{},
+	TEXT:        &TextRoutine{},
+	CLOCK:       &ClockRoutine{},
+	TIMER:       &TimerRoutine{},
+	TEMPERATURE: &TemperatureRoutine{},
+	SEQUENCE:    &SequenceRoutine{},
+	DAYSUNTIL:   &DaysUntilRoutine{},
 }
