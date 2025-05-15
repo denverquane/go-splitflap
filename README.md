@@ -26,13 +26,15 @@ Note that we provide the value for the `TEMPERATURE` routine from a `WEATHER_CUR
 ### Providers 
 Providers are data sources that are updated in the background, independent of the updating/displaying schedule of the Splitflap itself.
 
-Decoupling data *retrieval* (Providers) from data *display* (Routines) provides us several notable advantages:
-* Slow data retrieval (like fetching from a slow website or API) doesn't impact the responsiveness of the display and the core updating loop.
+Decoupling data *retrieval* (Providers) from data *display* (Routines/Dashboards) provides us several notable advantages:
+* Slow data retrieval (like fetching from a slow website/API) doesn't impact the responsiveness of the display and the core updating loop.
 * We can use generic and simple Routines (such as `TEMPERATURE`) on a wide variety of data sources. 
 This could be the current weather, weather in the future, or even a temperature sensor in your house...
-* API Requests are kept to a minimum. Without Providers, we would need to API request the current weather *anytime we load a dashboard that displays the weather*.
+* API Requests are kept to a minimum. Without Providers, we would need to request the current weather *anytime we load a dashboard that displays the weather*.
 If you want multiple dashboards with different arrangements of the same information (or want to cycle through dashboards using automation),
-this could cause API rate limiting or blocking entirely.
+this could easily cause API rate limiting or blocking entirely.
+* Providers can be configured to fetch data on different intervals depending on if they are active or not. So if the current 
+dashboard doesn't rely on information from a given Provider, we tell the Provider to fetch data more infrequently to save API requests.
 
 
 ## Backend Development/Installation

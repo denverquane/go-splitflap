@@ -21,6 +21,7 @@ type RoutineIface interface {
 	Init(size display.Size) error                                  // perform any initialization behavior that is required for further operation in subsequent Update calls
 	Update(now time.Time, values provider.ProviderValues) *Message // return nil if no update is required, but non-nil messages indicate a change to what the routine displays
 	Parameters() []Parameter                                       // return all fields that are expected to be provided (via JSON) for proper configuration
+	GetProviderName() string                                       // return the name of any provider that the routine requires to function properly ("" if none)
 }
 
 // Parameter represents configurable fields in a given Routine. If you write your own Routines, be meticulous
@@ -41,14 +42,14 @@ type RoutineBase struct {
 
 type Routine struct {
 	RoutineBase
-	Routine RoutineIface `json:"routine"`
+	Routine RoutineIface `json:"config"`
 }
 
 // RoutineJSON is solely for handling unknown routines that are specified via JSON, but have yet to be unmarshalled
 // into a concrete, well-defined RoutineIface implementation (via reflection)
 type RoutineJSON struct {
 	RoutineBase
-	Routine json.RawMessage `json:"routine"`
+	Routine json.RawMessage `json:"config"`
 }
 
 func supportsSize(routine RoutineIface, size display.Size) bool {

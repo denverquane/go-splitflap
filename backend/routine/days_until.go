@@ -66,3 +66,7 @@ func (d *DaysUntilRoutine) Parameters() []Parameter {
 		},
 	}
 }
+
+func (d *DaysUntilRoutine) GetProviderName() string {
+	return ""
+}

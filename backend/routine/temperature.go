@@ -98,6 +98,10 @@ func (w *TemperatureRoutine) Parameters() []Parameter {
 	}
 }
 
+func (t *TemperatureRoutine) GetProviderName() string {
+	return t.ProviderName
+}
+
 func (w *TemperatureRoutine) formatTemp(val float64, units string) string {
 	var str string
 	if w.RoundDecimal {

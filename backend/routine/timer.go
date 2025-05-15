@@ -68,3 +68,7 @@ func (t *TimerRoutine) Parameters() []Parameter {
 		},
 	}
 }
+
+func (t *TimerRoutine) GetProviderName() string {
+	return ""
+}

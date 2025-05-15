@@ -14,12 +14,12 @@ import (
 )
 
 type Display struct {
-	Size         display.Size                 `json:"size"`
-	Translations map[rune]rune                `json:"translations"`
-	Providers    map[string]provider.Provider `json:"providers"`
-	Dashboards   map[string]*Dashboard        `json:"dashboards"`
-	Layout       []int                        `json:"layout"`
-	PollRate     int64                        `json:"poll_rate_ms"`
+	Size         display.Size                  `json:"size"`
+	Translations map[rune]rune                 `json:"translations"`
+	Providers    map[string]*provider.Provider `json:"providers"`
+	Dashboards   map[string]*Dashboard         `json:"dashboards"`
+	Layout       []int                         `json:"layout"`
+	PollRate     int64                         `json:"poll_rate_ms"`
 
 	activeDashboard string
 
@@ -38,7 +38,7 @@ func NewDisplay(size display.Size) *Display {
 	return &Display{
 		Size:         size,
 		Translations: make(map[rune]rune),
-		Providers:    make(map[string]provider.Provider),
+		Providers:    make(map[string]*provider.Provider),
 		Dashboards:   make(map[string]*Dashboard),
 		Layout:       layout,
 
@@ -176,12 +176,14 @@ func (d *Display) AddRoutineToDashboard(dashboardName string, rout routine.Routi
 }
 
 func (d *Display) DeactivateActiveDashboard() {
+	d.deactivateProvidersForDashboard(d.activeDashboard)
 	d.activeDashboard = ""
 	return
 }
 
 func (d *Display) ActivateDashboard(name string) error {
 	d.DeactivateActiveDashboard()
+	d.activateProvidersForDashboard(name)
 	if dashboard, ok := d.Dashboards[name]; !ok {
 		return errors.New("dashboard does not exist")
 	} else {
@@ -320,4 +322,32 @@ func arrangeToLayout(current string, layout []int) string {
 		final += string(current[v])
 	}
 	return final
+}
+
+func (d *Display) activateProvidersForDashboard(dashboard string) {
+	d.swapProviderPollrate(dashboard, true)
+}
+
+func (d *Display) deactivateProvidersForDashboard(dashboard string) {
+	d.swapProviderPollrate(dashboard, false)
+}
+
+func (d *Display) swapProviderPollrate(dashboard string, active bool) {
+	if dash, ok := d.Dashboards[dashboard]; ok {
+		for _, rout := range dash.Routines {
+			providerName := rout.Routine.GetProviderName()
+			if providerName != "" {
+				if prov, ok := d.Providers[providerName]; ok {
+					var pollrate int
+					if active {
+						pollrate = prov.ActivePollRateSecs
+					} else {
+						pollrate = prov.BackgroundPollRateSecs
+					}
+					prov.Provider.SetPollRateSecs(pollrate)
+					slog.Info("provider pollrate changed because of a change to a dependant routine", "provider", providerName, "active", active, "pollrate", pollrate)
+				}
+			}
+		}
+	}
 }

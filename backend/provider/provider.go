@@ -7,19 +7,24 @@ import (
 )
 
 type ProviderJSON struct {
-	Type     ProviderType    `json:"type"`
-	Provider json.RawMessage `json:"provider"`
+	Type                   ProviderType    `json:"type"`
+	ActivePollRateSecs     int             `json:"active_poll_rate_secs"`     // when a routine is currently active that uses values from this provider, how often should it poll/update
+	BackgroundPollRateSecs int             `json:"background_poll_rate_secs"` // when no routines are currently using values from this provider
+	Provider               json.RawMessage `json:"config"`
 }
 
 type Provider struct {
-	Type     ProviderType `json:"type"`
-	Provider iface        `json:"provider"`
+	Type                   ProviderType `json:"type"`
+	ActivePollRateSecs     int          `json:"active_poll_rate_secs"`
+	BackgroundPollRateSecs int          `json:"background_poll_rate_secs"`
+	Provider               iface        `json:"config"`
 }
 
 // iface is the interface that any new providers should conform to. It should be able to stop and start, and provide
 // any data via the Values call
 type iface interface {
 	Start() error
+	SetPollRateSecs(int)
 	Stop()
 	Values() PValues
 }
@@ -48,6 +53,8 @@ func (p *Provider) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(aux.Provider, newProv); err != nil {
 			return err
 		}
+		p.ActivePollRateSecs = aux.ActivePollRateSecs
+		p.BackgroundPollRateSecs = aux.BackgroundPollRateSecs
 		p.Type = aux.Type
 		p.Provider = newProv
 	}
@@ -58,4 +65,5 @@ func (p *Provider) UnmarshalJSON(data []byte) error {
 var AllProviders = map[ProviderType]iface{
 	WEATHER_CURRENT:  &WeatherCurrentProvider{},
 	WEATHER_FORECAST: &WeatherForecastProvider{},
+	FLIGHTS_OVERHEAD: &FlightsOverheadProvider{},
 }

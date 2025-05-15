@@ -81,13 +81,16 @@ func main() {
 	}
 
 	for name, prov := range hub.Providers {
+		// start providers using the poll rate set for their background processing
+		pollRateSecs := prov.BackgroundPollRateSecs
+		prov.Provider.SetPollRateSecs(pollRateSecs)
 		err = prov.Provider.Start()
 		if err != nil {
 			slog.Error("failed to start provider with error", "error", err.Error(), "provider", name)
 			return
 		}
 	}
-	
+
 	go hub.Run(messages, state)
 
 	err = server.Run("3000", hub)

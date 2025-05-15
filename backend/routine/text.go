@@ -57,3 +57,7 @@ func (t *TextRoutine) Parameters() []Parameter {
 		},
 	}
 }
+
+func (t *TextRoutine) GetProviderName() string {
+	return ""
+}

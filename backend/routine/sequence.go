@@ -107,3 +107,7 @@ func (s *SequenceRoutine) Parameters() []Parameter {
 		},
 	}
 }
+
+func (s *SequenceRoutine) GetProviderName() string {
+	return ""
+}

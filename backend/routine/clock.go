@@ -101,6 +101,10 @@ func (c *ClockRoutine) Parameters() []Parameter {
 	}
 }
 
+func (c *ClockRoutine) GetProviderName() string {
+	return ""
+}
+
 func (c *ClockRoutine) getFormatString() string {
 	if c.Military {
 		return "15:04"
