@@ -12,6 +12,7 @@ import (
 // SetupDashboardHandlers registers all dashboard-related routes
 func SetupDashboardHandlers(r chi.Router, display *splitflap.Display) {
 	r.Get("/", getAllDashboards(display))
+	r.Get("/active", getActiveDashboard(display))
 	r.Post("/{dashboardName}", createOrUpdateDashboard(display))
 	r.Delete("/{dashboardName}", deleteDashboard(display))
 	r.Post("/{dashboardName}/activate", activateDashboard(display))
@@ -26,6 +27,12 @@ func getAllDashboards(display *splitflap.Display) http.HandlerFunc {
 			return
 		}
 		respondJSON(w, bytes)
+	}
+}
+
+func getActiveDashboard(display *splitflap.Display) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, []byte(display.ActiveDashboard()))
 	}
 }
 
