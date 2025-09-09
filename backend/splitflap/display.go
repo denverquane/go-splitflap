@@ -3,14 +3,15 @@ package splitflap
 import (
 	"encoding/json"
 	"errors"
-	"github.com/denverquane/go-splitflap/display"
-	"github.com/denverquane/go-splitflap/provider"
-	"github.com/denverquane/go-splitflap/routine"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
+	"github.com/denverquane/go-splitflap/routine"
 )
 
 type Display struct {
@@ -254,7 +255,7 @@ func (d *Display) Run(messages chan<- OutMessage, state <-chan string) {
 			currentMessage := initMessage(d.Size)
 			for _, m := range msgs {
 				// TODO should also make sure the routine sends back *enough* text to fill its specified size?
-				if len(m.Text) > m.Width*m.Height {
+				if len([]rune(m.Text)) > m.Width*m.Height {
 					slog.Error("Routine Update() returned a message that is larger than the routine's specified size", "text", m.Text)
 				} else {
 					currentMessage = mergeMessageToCurrentText(d.Size, currentMessage, m.Location, m.Message)

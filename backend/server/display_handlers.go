@@ -2,13 +2,14 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/denverquane/go-splitflap/serdiev/usb_serial"
-	"github.com/denverquane/go-splitflap/splitflap"
-	"github.com/go-chi/chi/v5"
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/denverquane/go-splitflap/serdiev/usb_serial"
+	"github.com/denverquane/go-splitflap/splitflap"
+	"github.com/go-chi/chi/v5"
 )
 
 // UpdateDisplayRequest represents the request body for updating display text
@@ -19,12 +20,19 @@ type UpdateDisplayRequest struct {
 
 // SetupDisplayHandlers registers all display-related routes
 func SetupDisplayHandlers(r chi.Router, display *splitflap.Display) {
+	r.Get("/state", getDisplayState(display))
 	r.Get("/size", getDisplaySize(display))
 	r.Post("/clear", clearDisplay(display))
 	r.Post("/update", updateDisplay(display))
 	r.Get("/alphabet", getAlphabet())
 	r.Get("/translations", getTranslations(display))
 	r.Post("/translations", updateTranslations(display))
+}
+
+func getDisplayState(display *splitflap.Display) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, []byte(display.GetState()))
+	}
 }
 
 // getDisplaySize returns the current display dimensions

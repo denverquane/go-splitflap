@@ -3,11 +3,12 @@ package routine
 import (
 	"errors"
 	"fmt"
-	"github.com/denverquane/go-splitflap/display"
-	"github.com/denverquane/go-splitflap/provider"
 	"log/slog"
 	"math"
 	"time"
+
+	"github.com/denverquane/go-splitflap/display"
+	"github.com/denverquane/go-splitflap/provider"
 )
 
 const TEMPERATURE = "TEMPERATURE"
@@ -115,14 +116,14 @@ func (w *TemperatureRoutine) formatTemp(val float64, units string) string {
 	}
 
 	if w.ShowDegree {
-		if len(str) < w.size.Width {
+		if len([]rune(str)) < w.size.Width {
 			str += "°"
 		} else {
 			slog.Info("not adding degree symbol to weather because output is full", "string", str, "config width", w.size.Width)
 		}
 	}
 	if w.ShowUnits {
-		if len(str) < w.size.Width {
+		if len([]rune(str)) < w.size.Width {
 			str += units
 		} else {
 			slog.Info("not adding units to weather because output is full", "string", str, "config width", w.size.Width)
